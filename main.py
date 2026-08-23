@@ -2,6 +2,7 @@ from src.MyNovellib.scene import Canvas
 from src.MyNovellib.character import Character
 from src.MyNovellib.engine import Engine
 from src.MyNovellib.dialogue import speak
+from src.MyNovellib.story import enter, emotion, move, pause, change_scene
 
 
 jef = Character("Jef")
@@ -39,20 +40,30 @@ campo = Canvas(
     music="assets/music/ambiente_2.mp3"
 )
 
+sala = Canvas(
+    "sala",
+    "assets/fundos/sala.jpg",
+    1920,
+    1080
+)
+
+# Jef já está no campo esperando. Ken ainda não existe na cena -- ele
+# chega correndo como parte da história (enter()), não como
+# configuração inicial.
 campo.add_character(
     jef,
     1,
     scale=0.5
 )
 
-campo.add_character(
-    ken,
-    3,
-    scale=0.5
-)
-
 
 story = [
+
+    enter(
+        ken,
+        position=3,
+        scale=0.5
+    ),
 
     speak(
         ken,
@@ -83,6 +94,10 @@ story = [
         "eu só fui mexer no código de produção",
         delay=2
     ),
+
+    # a partir daqui o Jef fica bravo -- a emoção muda antes da
+    # próxima fala, sem precisar de nenhum truque.
+    emotion(jef, "bravo"),
 
     speak(
         jef,
@@ -162,6 +177,9 @@ story = [
         delay=3
     ),
 
+    # beat de silêncio antes do "..." -- dá tempo do soco chegar.
+    pause(1),
+
     speak(
         jef,
         "...",
@@ -185,6 +203,9 @@ story = [
         "um push então?",
         delay=1
     ),
+
+    # Jef avança na direção do Ken pra gritar de perto.
+    move(jef, position=2, scale=0.6),
 
     speak(
         jef,
@@ -258,6 +279,9 @@ story = [
         delay=2
     ),
 
+    # o Jef desiste de brigar -- volta pro "normal", resignado.
+    emotion(jef, "normal"),
+
     speak(
         jef,
         "eu sei",
@@ -322,7 +346,23 @@ story = [
         ken,
         "mas quero aproveitar o espetáculo",
         delay=3
-    )
+    ),
+
+    pause(1),
+
+    # os dois vão até a sala do chefe -- fade out do campo, fade in
+    # já na sala.
+    change_scene(sala, transition="fade", duration=1.5),
+
+    enter(jef, position=2, scale=0.5),
+    enter(ken, position=3, scale=0.5),
+
+    speak(
+        jef,
+        "chefe... temos um probleminha",
+        delay=2
+    ),
+
 ]
 
 
