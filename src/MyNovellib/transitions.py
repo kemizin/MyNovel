@@ -7,6 +7,8 @@
 
 import pygame
 
+from src.MyNovellib.input import Input
+
 
 # Fade clássico: cena A escurece até preto, troca de cena acontece com
 # a tela preta, depois a cena B clareia a partir do preto.
@@ -47,12 +49,12 @@ class FadeTransition:
 
         while engine.running:
 
-            for event in pygame.event.get():
+            user_input = Input.poll()
 
-                if event.type == pygame.QUIT:
+            if user_input.quit:
 
-                    engine.running = False
-                    return
+                engine.running = False
+                return
 
             elapsed = pygame.time.get_ticks() - start
             progress = min(elapsed / duration_ms, 1.0)

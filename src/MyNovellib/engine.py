@@ -17,6 +17,7 @@ from src.MyNovellib.story import (
 from src.MyNovellib.transitions import FadeTransition
 from src.MyNovellib.state import GameState
 from src.MyNovellib.choice_ui import ChoiceUI
+from src.MyNovellib.input import Input
 
 
 class Engine:
@@ -170,40 +171,24 @@ class Engine:
 
             current_time = pygame.time.get_ticks()
 
-            for event in pygame.event.get():
+            user_input = Input.poll()
 
-                if event.type == pygame.QUIT:
+            if user_input.quit:
 
-                    self.running = False
+                self.running = False
+                return
+
+            if user_input.advance:
+
+                if not text_finished:
+
+                    visible_text = dialogue.text
+                    text_finished = True
+
+                elif dialogue.delay is None:
+
+                    self.finish_dialogue(character)
                     return
-
-                if event.type == pygame.KEYDOWN:
-
-                    if event.key == pygame.K_SPACE:
-
-                        if not text_finished:
-
-                            visible_text = dialogue.text
-                            text_finished = True
-
-                        elif dialogue.delay is None:
-
-                            self.finish_dialogue(character)
-                            return
-
-                if event.type == pygame.MOUSEBUTTONDOWN:
-
-                    if event.button == 1:
-
-                        if not text_finished:
-
-                            visible_text = dialogue.text
-                            text_finished = True
-
-                        elif dialogue.delay is None:
-
-                            self.finish_dialogue(character)
-                            return
 
             # --------------------------------
             # TEXTO SENDO ESCRITO
@@ -398,12 +383,12 @@ class Engine:
 
         while self.running:
 
-            for event in pygame.event.get():
+            user_input = Input.poll()
 
-                if event.type == pygame.QUIT:
+            if user_input.quit:
 
-                    self.running = False
-                    return
+                self.running = False
+                return
 
             self.draw_scene()
             pygame.display.flip()
@@ -427,12 +412,14 @@ class Engine:
 
         while self.running:
 
-            for event in pygame.event.get():
+            user_input = Input.poll()
 
-                if event.type == pygame.QUIT:
+            if user_input.quit:
 
-                    self.running = False
-                    return
+                self.running = False
+                return
+
+            for event in user_input.events:
 
                 confirmed = ui.handle_event(event)
 
