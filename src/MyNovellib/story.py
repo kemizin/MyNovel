@@ -5,6 +5,20 @@
 
 # Classe base de todas as ações da história. Não faz nada sozinha,
 # só serve para a Engine reconhecer "isso é uma ação da história".
+#
+# Ciclo de vida garantido pela Engine (ver engine.py, Engine.run):
+#   1. a Action só guarda dados -- nada é executado ao ser criada
+#      (speak/emotion/move/... retornam a Action, não a executam)
+#   2. a Engine despacha a Action para o seu execute_*, que atualiza
+#      o estado (Character/Canvas)
+#   3. o mesmo execute_* deixa a tela já atualizada antes de retornar,
+#      chamando self.render() -- exceto Dialogue, que tem loop de
+#      desenho próprio (um frame por vez, com input) e não depende de
+#      render() para aparecer
+#   4. só então a Engine passa para a próxima Action da lista `story`
+#
+# Ou seja: nenhuma Action depende de um speak() posterior para que sua
+# mudança apareça na tela.
 class Action:
     pass
 
