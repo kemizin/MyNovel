@@ -89,13 +89,13 @@ story = [
     speak(jef, "Relaxa, sou so eu.", delay=1.2),
 
     # emotion(): troca a emoção atual do personagem.
-    emotion(jef, "bravo"),
 
     speak(jef, "MAS SE VOCE ME CHAMAR DE FANTASMA DE NOVO...", delay=1.2),
-
+    
+    emotion(jef, "bravo"),
     # move(): reposiciona/reenquadra um personagem já em cena, sem
     # perder o que não foi informado (aqui a emoção "bravo" continua).
-    move(jef, position=2, scale=0.7),
+    move(jef, position=2, scale=1),
 
     # pause(): segura a cena parada por N segundos, sem exigir input.
     pause(1),

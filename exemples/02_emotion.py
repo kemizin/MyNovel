@@ -54,6 +54,10 @@ story = [
     pause(0.5),
 
     speak(jef, "E voltei para 'normal'.", delay=1.5),
+    pause(0.5),
+
+    speak(jef,"lembre de se atentar ao tamanho das imagens, você pode mudar a escala se achar necessário"),
+    pause(0.5),
 ]
 
 engine = Engine()
