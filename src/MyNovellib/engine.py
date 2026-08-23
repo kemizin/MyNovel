@@ -6,7 +6,9 @@ from src.MyNovellib.story import (
     Move,
     AddCharacter,
     RemoveCharacter,
-    ChangeScene
+    ChangeScene,
+    Enter,
+    Exit
 )
 
 
@@ -64,6 +66,14 @@ class Engine:
             elif isinstance(action, ChangeScene):
 
                 self.execute_change_scene(action)
+
+            elif isinstance(action, Enter):
+
+                self.execute_enter(action)
+
+            elif isinstance(action, Exit):
+
+                self.execute_exit(action)
 
         self.running = False
 
@@ -311,6 +321,26 @@ class Engine:
     def execute_change_scene(self, action):
 
         self._load_canvas(action.canvas)
+
+        self.render()
+
+    # Entrada narrativa de um personagem (reaproveita Canvas.add_character).
+    def execute_enter(self, action):
+
+        self.canvas.add_character(
+            action.character,
+            action.position,
+            scale=action.scale,
+            offset_x=action.offset_x,
+            offset_y=action.offset_y
+        )
+
+        self.render()
+
+    # Saída narrativa de um personagem (reaproveita Canvas.remove_character).
+    def execute_exit(self, action):
+
+        self.canvas.remove_character(action.character)
 
         self.render()
 

@@ -96,3 +96,35 @@ class ChangeScene(Action):
 
 def change_scene(canvas):
     return ChangeScene(canvas)
+
+
+# Ação: entrada narrativa de um personagem na cena. Tecnicamente faz o
+# mesmo que AddCharacter (adiciona o personagem ao Canvas), mas existe
+# como Action própria porque semanticamente é um acontecimento da
+# história ("o personagem entrou"), não uma configuração inicial de
+# cena. add_character() continua existindo para montar a cena antes
+# da história começar.
+class Enter(Action):
+
+    def __init__(self, character, position, scale=0.5, offset_x=0, offset_y=0):
+        self.character = character
+        self.position = position
+        self.scale = scale
+        self.offset_x = offset_x
+        self.offset_y = offset_y
+
+
+def enter(character, position, scale=0.5, offset_x=0, offset_y=0):
+    return Enter(character, position, scale, offset_x, offset_y)
+
+
+# Ação: saída narrativa de um personagem da cena (equivalente
+# semântico de RemoveCharacter, usado dentro da história).
+class Exit(Action):
+
+    def __init__(self, character):
+        self.character = character
+
+
+def exit(character):
+    return Exit(character)
