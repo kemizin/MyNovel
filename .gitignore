@@ -2,3 +2,8 @@
 __pycache__/
 *.pyc
 vnlib/
+
+# história pessoal e arte de personagens/fundos -- não vão pro repositório público
+main.py
+assets/char/
+assets/fundos/
