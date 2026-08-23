@@ -71,6 +71,13 @@ quarto = Canvas(
     1080
 )
 
+sala = Canvas(
+    "sala",
+    "assets/fundos/sala.jpg",
+    1920,
+    1080
+)
+
 # add_character(): configuração INICIAL da cena, antes da história
 # começar. Ken já está no campo desde o primeiro frame.
 campo.add_character(ken, position=3, scale=0.5)
@@ -91,7 +98,7 @@ story = [
     # emotion(): troca a emoção atual do personagem.
 
     speak(jef, "MAS SE VOCE ME CHAMAR DE FANTASMA DE NOVO...", delay=1.2),
-    
+
     emotion(jef, "bravo"),
     # move(): reposiciona/reenquadra um personagem já em cena, sem
     # perder o que não foi informado (aqui a emoção "bravo" continua).
