@@ -2,6 +2,8 @@
 # Ela apenas retorna um objeto de Action, que a Engine executa depois,
 # em ordem, ao percorrer a lista `story`.
 
+import operator as _operator
+
 
 # Classe base de todas as ações da história. Não faz nada sozinha,
 # só serve para a Engine reconhecer "isso é uma ação da história".
@@ -191,3 +193,47 @@ class Choice(Action):
 
 def choice(*options):
     return Choice(*options)
+
+
+_OPERATORS = {
+    "==": _operator.eq,
+    "!=": _operator.ne,
+    ">": _operator.gt,
+    "<": _operator.lt,
+    ">=": _operator.ge,
+    "<=": _operator.le,
+}
+
+
+# Ação: executa uma lista de Actions só se uma condição sobre o
+# GameState for verdadeira. Não cria uma linguagem de scripting -- só
+# um teste simples (GameState.get(key) OPERADOR value).
+#
+#     if_state(
+#         "amizade", ">=", 10,
+#         [speak(jef, "Eu confio em você.")]
+#     )
+#
+# Operadores aceitos: == != > < >= <=. `value` pode ser número,
+# string ou bool (bool funciona bem com == e !=).
+class IfState(Action):
+
+    def __init__(self, key, operator, value, actions):
+
+        if operator not in _OPERATORS:
+            raise ValueError(
+                f"Operador inválido: {operator!r}. "
+                f"Use um de: {', '.join(sorted(_OPERATORS))}."
+            )
+
+        self.key = key
+        self.operator = operator
+        self.value = value
+        self.actions = actions
+
+    def evaluate(self, current_value):
+        return _OPERATORS[self.operator](current_value, self.value)
+
+
+def if_state(key, operator, value, actions):
+    return IfState(key, operator, value, actions)

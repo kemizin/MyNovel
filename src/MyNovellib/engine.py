@@ -10,7 +10,8 @@ from src.MyNovellib.story import (
     Enter,
     Exit,
     Pause,
-    Choice
+    Choice,
+    IfState
 )
 from src.MyNovellib.transitions import FadeTransition
 from src.MyNovellib.state import GameState
@@ -49,52 +50,61 @@ class Engine:
             if not self.running:
                 break
 
-            # Despacha cada Action da história para o executor certo.
-            # Ações fora dessa lista são ignoradas (sem quebrar a história).
-
-            if isinstance(action, Dialogue):
-
-                self.execute_dialogue(action)
-
-            elif isinstance(action, Emotion):
-
-                self.execute_emotion(action)
-
-            elif isinstance(action, Move):
-
-                self.execute_move(action)
-
-            elif isinstance(action, AddCharacter):
-
-                self.execute_add_character(action)
-
-            elif isinstance(action, RemoveCharacter):
-
-                self.execute_remove_character(action)
-
-            elif isinstance(action, ChangeScene):
-
-                self.execute_change_scene(action)
-
-            elif isinstance(action, Enter):
-
-                self.execute_enter(action)
-
-            elif isinstance(action, Exit):
-
-                self.execute_exit(action)
-
-            elif isinstance(action, Pause):
-
-                self.execute_pause(action)
-
-            elif isinstance(action, Choice):
-
-                self.execute_choice(action)
+            self._execute_action(action)
 
         self.running = False
 
         pygame.quit()
+
+    # Despacha uma única Action para o executor certo. Extraído de
+    # run() pra poder ser reaproveitado por Actions que executam uma
+    # sublista de Actions (IfState) -- inclusive aninhadas. Ações fora
+    # dessa lista são ignoradas (sem quebrar a história).
+    def _execute_action(self, action):
+
+        if isinstance(action, Dialogue):
+
+            self.execute_dialogue(action)
+
+        elif isinstance(action, Emotion):
+
+            self.execute_emotion(action)
+
+        elif isinstance(action, Move):
+
+            self.execute_move(action)
+
+        elif isinstance(action, AddCharacter):
+
+            self.execute_add_character(action)
+
+        elif isinstance(action, RemoveCharacter):
+
+            self.execute_remove_character(action)
+
+        elif isinstance(action, ChangeScene):
+
+            self.execute_change_scene(action)
+
+        elif isinstance(action, Enter):
+
+            self.execute_enter(action)
+
+        elif isinstance(action, Exit):
+
+            self.execute_exit(action)
+
+        elif isinstance(action, Pause):
+
+            self.execute_pause(action)
+
+        elif isinstance(action, Choice):
+
+            self.execute_choice(action)
+
+        elif isinstance(action, IfState):
+
+            self.execute_if_state(action)
 
     # Carrega uma cena (background, título da janela e música).
     # Usado tanto no início do run() quanto ao trocar de cena (ChangeScene).
@@ -456,6 +466,24 @@ class Engine:
 
             pygame.display.flip()
             self.clock.tick(60)
+
+    # Executa action.actions só se a condição sobre o GameState for
+    # verdadeira. Cada Action interna passa pelo mesmo despacho de
+    # sempre (_execute_action), então pode ser qualquer Action --
+    # inclusive outro IfState aninhado.
+    def execute_if_state(self, action):
+
+        current = self.state.get(action.key)
+
+        if not action.evaluate(current):
+            return
+
+        for inner_action in action.actions:
+
+            if not self.running:
+                break
+
+            self._execute_action(inner_action)
 
     # Aplica os efeitos da opção confirmada (action.effects[selected],
     # um dict {chave: quantidade}) no GameState da Engine.
