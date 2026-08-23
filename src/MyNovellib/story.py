@@ -151,6 +151,19 @@ def pause(duration):
 # confirmar uma opção -- por teclado (setas + espaço/enter) ou mouse
 # (clique). selected_index começa None e só é preenchido pela Engine
 # depois que o jogador confirma (ver Waystone "choice result").
+#
+# Cada opção pode ser só o texto:
+#
+#     choice("Ir para casa", "Ficar aqui")
+#
+# ou um par (texto, efeitos) pra alterar o GameState quando aquela
+# opção for escolhida -- efeitos é um dict {chave: quantidade},
+# aplicado via GameState.increment():
+#
+#     choice(
+#         ("Ajudar Jef", {"amizade": 1}),
+#         ("Ignorar Jef", {"amizade": 0}),
+#     )
 class Choice(Action):
 
     def __init__(self, *options):
@@ -160,7 +173,19 @@ class Choice(Action):
                 "choice() precisa de pelo menos 2 opções."
             )
 
-        self.options = list(options)
+        self.options = []
+        self.effects = []
+
+        for option in options:
+
+            if isinstance(option, tuple):
+                text, effects = option
+            else:
+                text, effects = option, {}
+
+            self.options.append(text)
+            self.effects.append(effects)
+
         self.selected_index = None
 
 

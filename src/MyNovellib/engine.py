@@ -13,11 +13,15 @@ from src.MyNovellib.story import (
     Choice
 )
 from src.MyNovellib.transitions import FadeTransition
+from src.MyNovellib.state import GameState
 
 
 class Engine:
 
-    def __init__(self):
+    # `state`: GameState a usar (ex: com um default customizado). Se
+    # não informado, cria um GameState() novo -- Choice (e, mais pra
+    # frente, condições) sempre tem um estado disponível em self.state.
+    def __init__(self, state=None):
 
         pygame.init()
         pygame.mixer.init()
@@ -29,6 +33,8 @@ class Engine:
         self.running = False
 
         self.font = pygame.font.Font(None, 42)
+
+        self.state = state if state is not None else GameState()
 
         pygame.mixer.music.set_volume(0.5)
 
@@ -421,6 +427,7 @@ class Engine:
                     elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
 
                         action.selected_index = selected
+                        self._apply_choice_effects(action, selected)
                         self.render()
                         return
 
@@ -440,6 +447,7 @@ class Engine:
                         if clicked is not None:
 
                             action.selected_index = clicked
+                            self._apply_choice_effects(action, clicked)
                             self.render()
                             return
 
@@ -448,6 +456,13 @@ class Engine:
 
             pygame.display.flip()
             self.clock.tick(60)
+
+    # Aplica os efeitos da opção confirmada (action.effects[selected],
+    # um dict {chave: quantidade}) no GameState da Engine.
+    def _apply_choice_effects(self, action, selected):
+
+        for key, amount in action.effects[selected].items():
+            self.state.increment(key, amount)
 
     # Calcula os retângulos de cada opção da Choice (usado tanto para
     # desenhar quanto para detectar hover/clique) -- lista vertical,
