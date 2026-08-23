@@ -11,6 +11,7 @@ from src.MyNovellib.story import (
     Exit,
     Pause
 )
+from src.MyNovellib.transitions import FadeTransition
 
 
 class Engine:
@@ -322,12 +323,20 @@ class Engine:
 
         self.render()
 
-    # Troca a cena atual (sem transição visual ainda).
+    # Troca a cena atual. Sem `transition`, a troca é instantânea.
+    # Com transition="fade", delega para FadeTransition, que já deixa
+    # a tela renderizada corretamente ao final (fade in até a cena nova).
     def execute_change_scene(self, action):
 
-        self._load_canvas(action.canvas)
+        if action.transition == "fade":
 
-        self.render()
+            FadeTransition(action.duration).run(self, action.canvas)
+
+        else:
+
+            self._load_canvas(action.canvas)
+
+            self.render()
 
     # Entrada narrativa de um personagem (reaproveita Canvas.add_character).
     def execute_enter(self, action):

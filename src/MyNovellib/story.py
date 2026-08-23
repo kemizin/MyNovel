@@ -86,16 +86,19 @@ def remove_character(character):
     return RemoveCharacter(character)
 
 
-# Ação: trocar a cena (Canvas) atual. Ainda sem transição visual
-# (fade/animação) -- troca é instantânea.
+# Ação: trocar a cena (Canvas) atual. Por padrão a troca é instantânea;
+# passando transition="fade" a Engine faz fade out -> troca -> fade in
+# (ver src/MyNovellib/transitions.py) usando `duration` segundos ao todo.
 class ChangeScene(Action):
 
-    def __init__(self, canvas):
+    def __init__(self, canvas, transition=None, duration=0.5):
         self.canvas = canvas
+        self.transition = transition
+        self.duration = duration
 
 
-def change_scene(canvas):
-    return ChangeScene(canvas)
+def change_scene(canvas, transition=None, duration=0.5):
+    return ChangeScene(canvas, transition, duration)
 
 
 # Ação: entrada narrativa de um personagem na cena. Tecnicamente faz o
