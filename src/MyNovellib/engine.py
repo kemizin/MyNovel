@@ -9,7 +9,8 @@ from src.MyNovellib.story import (
     ChangeScene,
     Enter,
     Exit,
-    Pause
+    Pause,
+    Choice
 )
 from src.MyNovellib.transitions import FadeTransition
 
@@ -80,6 +81,10 @@ class Engine:
             elif isinstance(action, Pause):
 
                 self.execute_pause(action)
+
+            elif isinstance(action, Choice):
+
+                self.execute_choice(action)
 
         self.running = False
 
@@ -385,6 +390,124 @@ class Engine:
 
             if pygame.time.get_ticks() - start >= duration_ms:
                 return
+
+    # Pausa a história e espera o jogador escolher uma opção. Bloqueia
+    # (não retorna) até uma opção ser CONFIRMADA -- mover a seleção
+    # (setas/hover do mouse) nunca confirma sozinho, só espaço/enter
+    # ou um clique. O resultado fica em action.selected_index.
+    def execute_choice(self, action):
+
+        selected = 0
+
+        while self.running:
+
+            for event in pygame.event.get():
+
+                if event.type == pygame.QUIT:
+
+                    self.running = False
+                    return
+
+                if event.type == pygame.KEYDOWN:
+
+                    if event.key in (pygame.K_UP, pygame.K_LEFT):
+
+                        selected = (selected - 1) % len(action.options)
+
+                    elif event.key in (pygame.K_DOWN, pygame.K_RIGHT):
+
+                        selected = (selected + 1) % len(action.options)
+
+                    elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+
+                        action.selected_index = selected
+                        self.render()
+                        return
+
+                if event.type == pygame.MOUSEMOTION:
+
+                    hovered = self._choice_option_at(action, event.pos)
+
+                    if hovered is not None:
+                        selected = hovered
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+
+                    if event.button == 1:
+
+                        clicked = self._choice_option_at(action, event.pos)
+
+                        if clicked is not None:
+
+                            action.selected_index = clicked
+                            self.render()
+                            return
+
+            self.draw_scene()
+            self.draw_choice(action, selected)
+
+            pygame.display.flip()
+            self.clock.tick(60)
+
+    # Calcula os retângulos de cada opção da Choice (usado tanto para
+    # desenhar quanto para detectar hover/clique) -- lista vertical,
+    # centralizada na tela.
+    def _choice_rects(self, action):
+
+        box_width = 500
+        box_height = 60
+        gap = 20
+
+        count = len(action.options)
+        total_height = count * box_height + (count - 1) * gap
+
+        x = (self.screen.get_width() - box_width) // 2
+        start_y = (self.screen.get_height() - total_height) // 2
+
+        rects = []
+
+        for i in range(count):
+
+            y = start_y + i * (box_height + gap)
+            rects.append(pygame.Rect(x, y, box_width, box_height))
+
+        return rects
+
+    # Retorna o índice da opção sob `pos`, ou None se não estiver
+    # sobre nenhuma.
+    def _choice_option_at(self, action, pos):
+
+        for i, rect in enumerate(self._choice_rects(action)):
+
+            if rect.collidepoint(pos):
+                return i
+
+        return None
+
+    def draw_choice(self, action, selected_index):
+
+        rects = self._choice_rects(action)
+
+        for i, rect in enumerate(rects):
+
+            box = pygame.Surface(rect.size, pygame.SRCALPHA)
+
+            if i == selected_index:
+                box.fill((90, 90, 220, 230))
+            else:
+                box.fill((30, 30, 30, 200))
+
+            self.screen.blit(box, rect.topleft)
+
+            text_surface = self.font.render(
+                action.options[i],
+                True,
+                (255, 255, 255)
+            )
+
+            text_rect = text_surface.get_rect(center=rect.center)
+
+            self.screen.blit(text_surface, text_rect)
 
     # Desenha e mostra a tela imediatamente. Usado por ações que mudam
     # a cena mas não têm loop próprio de desenho (diferente de Dialogue,

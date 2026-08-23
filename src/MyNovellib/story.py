@@ -144,3 +144,25 @@ class Pause(Action):
 
 def pause(duration):
     return Pause(duration)
+
+
+# Ação: pausa a história e mostra opções pro jogador escolher uma.
+# A Engine bloqueia (não avança pra próxima Action) até o jogador
+# confirmar uma opção -- por teclado (setas + espaço/enter) ou mouse
+# (clique). selected_index começa None e só é preenchido pela Engine
+# depois que o jogador confirma (ver Waystone "choice result").
+class Choice(Action):
+
+    def __init__(self, *options):
+
+        if len(options) < 2:
+            raise ValueError(
+                "choice() precisa de pelo menos 2 opções."
+            )
+
+        self.options = list(options)
+        self.selected_index = None
+
+
+def choice(*options):
+    return Choice(*options)
