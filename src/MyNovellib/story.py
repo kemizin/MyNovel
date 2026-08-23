@@ -154,18 +154,29 @@ def pause(duration):
 # (clique). selected_index começa None e só é preenchido pela Engine
 # depois que o jogador confirma (ver Waystone "choice result").
 #
-# Cada opção pode ser só o texto:
+# Cada opção pode ser:
 #
-#     choice("Ir para casa", "Ficar aqui")
+#   - só o texto:
 #
-# ou um par (texto, efeitos) pra alterar o GameState quando aquela
-# opção for escolhida -- efeitos é um dict {chave: quantidade},
-# aplicado via GameState.increment():
+#         choice("Ir para casa", "Ficar aqui")
 #
-#     choice(
-#         ("Ajudar Jef", {"amizade": 1}),
-#         ("Ignorar Jef", {"amizade": 0}),
-#     )
+#   - (texto, efeitos) pra alterar o GameState quando escolhida --
+#     efeitos é um dict {chave: quantidade}, aplicado via
+#     GameState.increment():
+#
+#         choice(
+#             ("Ajudar Jef", {"amizade": 1}),
+#             ("Ignorar Jef", {"amizade": 0}),
+#         )
+#
+#   - (texto, efeitos, actions) pra também executar uma lista de
+#     Actions imediatamente quando aquela opção for escolhida --
+#     ramificação real da história, sem precisar de if_state depois:
+#
+#         choice(
+#             ("Sim", {"ajudou": 1}, [speak(jef, "Claro.")]),
+#             ("Não", {"ajudou": 0}, [speak(jef, "Nem pensar.")]),
+#         )
 class Choice(Action):
 
     def __init__(self, *options):
@@ -177,16 +188,31 @@ class Choice(Action):
 
         self.options = []
         self.effects = []
+        self.branches = []
 
         for option in options:
 
             if isinstance(option, tuple):
-                text, effects = option
+
+                if len(option) == 2:
+                    text, effects = option
+                    actions = []
+
+                elif len(option) == 3:
+                    text, effects, actions = option
+
+                else:
+                    raise ValueError(
+                        "Cada opção deve ser um texto, (texto, efeitos) "
+                        "ou (texto, efeitos, actions)."
+                    )
+
             else:
-                text, effects = option, {}
+                text, effects, actions = option, {}, []
 
             self.options.append(text)
             self.effects.append(effects)
+            self.branches.append(actions)
 
         self.selected_index = None
 
@@ -237,3 +263,17 @@ class IfState(Action):
 
 def if_state(key, operator, value, actions):
     return IfState(key, operator, value, actions)
+
+
+# Ação: define um valor no GameState diretamente (atribuição, não
+# incremento -- complementa os efeitos de Choice, que sempre somam).
+# Útil pra marcar flags fora de uma escolha, ex: set_state("viu_final_bom", True).
+class SetState(Action):
+
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+
+
+def set_state(key, value):
+    return SetState(key, value)

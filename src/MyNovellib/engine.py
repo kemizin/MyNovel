@@ -11,7 +11,8 @@ from src.MyNovellib.story import (
     Exit,
     Pause,
     Choice,
-    IfState
+    IfState,
+    SetState
 )
 from src.MyNovellib.transitions import FadeTransition
 from src.MyNovellib.state import GameState
@@ -105,6 +106,10 @@ class Engine:
         elif isinstance(action, IfState):
 
             self.execute_if_state(action)
+
+        elif isinstance(action, SetState):
+
+            self.execute_set_state(action)
 
     # Carrega uma cena (background, título da janela e música).
     # Usado tanto no início do run() quanto ao trocar de cena (ChangeScene).
@@ -439,6 +444,7 @@ class Engine:
                         action.selected_index = selected
                         self._apply_choice_effects(action, selected)
                         self.render()
+                        self._execute_choice_branch(action, selected)
                         return
 
                 if event.type == pygame.MOUSEMOTION:
@@ -459,6 +465,7 @@ class Engine:
                             action.selected_index = clicked
                             self._apply_choice_effects(action, clicked)
                             self.render()
+                            self._execute_choice_branch(action, clicked)
                             return
 
             self.draw_scene()
@@ -491,6 +498,23 @@ class Engine:
 
         for key, amount in action.effects[selected].items():
             self.state.increment(key, amount)
+
+    # Executa a ramificação da opção confirmada (action.branches[selected],
+    # uma lista de Actions) -- ramificação real da história, sem
+    # precisar de um if_state separado depois da Choice.
+    def _execute_choice_branch(self, action, selected):
+
+        for inner_action in action.branches[selected]:
+
+            if not self.running:
+                break
+
+            self._execute_action(inner_action)
+
+    # Define um valor no GameState diretamente (atribuição).
+    def execute_set_state(self, action):
+
+        self.state.set(action.key, action.value)
 
     # Calcula os retângulos de cada opção da Choice (usado tanto para
     # desenhar quanto para detectar hover/clique) -- lista vertical,
