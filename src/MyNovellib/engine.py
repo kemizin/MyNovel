@@ -8,7 +8,8 @@ from src.MyNovellib.story import (
     RemoveCharacter,
     ChangeScene,
     Enter,
-    Exit
+    Exit,
+    Pause
 )
 
 
@@ -74,6 +75,10 @@ class Engine:
             elif isinstance(action, Exit):
 
                 self.execute_exit(action)
+
+            elif isinstance(action, Pause):
+
+                self.execute_pause(action)
 
         self.running = False
 
@@ -343,6 +348,34 @@ class Engine:
         self.canvas.remove_character(action.character)
 
         self.render()
+
+    # Mantém a cena atual na tela por `duration` segundos, sem esperar
+    # input. Continua processando QUIT para a janela não travar.
+    def execute_pause(self, action):
+
+        duration_ms = max(
+            int(action.duration * 1000),
+            0
+        )
+
+        start = pygame.time.get_ticks()
+
+        while self.running:
+
+            for event in pygame.event.get():
+
+                if event.type == pygame.QUIT:
+
+                    self.running = False
+                    return
+
+            self.draw_scene()
+            pygame.display.flip()
+
+            self.clock.tick(60)
+
+            if pygame.time.get_ticks() - start >= duration_ms:
+                return
 
     # Desenha e mostra a tela imediatamente. Usado por ações que mudam
     # a cena mas não têm loop próprio de desenho (diferente de Dialogue,

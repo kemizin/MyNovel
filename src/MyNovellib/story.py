@@ -128,3 +128,16 @@ class Exit(Action):
 
 def exit(character):
     return Exit(character)
+
+
+# Ação: mantém a cena parada na tela por `duration` segundos, sem
+# exigir input do jogador. Primeira Action com duração própria --
+# base para futuras ações visuais (fade, shake, flash, ...).
+class Pause(Action):
+
+    def __init__(self, duration):
+        self.duration = duration
+
+
+def pause(duration):
+    return Pause(duration)
