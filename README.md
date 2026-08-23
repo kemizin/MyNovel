@@ -3,8 +3,8 @@
 Biblioteca Python para criação de Visual Novels usando [Pygame](https://www.pygame.org/).
 
 O objetivo é deixar quem escreve a história pensando em **personagens, cenas, falas,
-emoções e acontecimentos** — sem precisar conhecer Pygame, event loops, surfaces ou
-qualquer detalhe interno de renderização.
+emoções, acontecimentos e escolhas do jogador** — sem precisar conhecer Pygame, event
+loops, surfaces ou qualquer detalhe interno de renderização.
 
 ```python
 speak(ken, "Cara, você tá comendo terra?")
@@ -48,6 +48,7 @@ E a pasta [`exemples/`](exemples/) tem um arquivo focado em cada função indivi
 | `Canvas` | Uma cena: nome, imagem de fundo, tamanho da janela, música e os personagens visíveis nela. |
 | `Engine` | Executa a história: abre a janela, desenha cada frame, processa input. |
 | `story` | Uma lista de **Actions** (falas e acontecimentos), executadas em ordem. |
+| `GameState` | Estado narrativo em memória (valores e flags) que a história lê/altera. |
 
 ### Character
 
@@ -204,6 +205,135 @@ de cena sozinhos; use `enter()` de novo se precisar deles na cena nova).
 - `transition="fade"`: fade out da cena atual → troca → fade in da cena nova, em
   `duration` segundos ao todo.
 
+## Gameplay: escolhas, estado e condições
+
+Além da história linear, a MyNovel permite que o jogador escolha um caminho — a
+história muda de verdade dependendo da escolha.
+
+### `choice(*options)`
+
+Pausa a história e mostra as opções na tela. **Controles**: setas (↑↓←→) navegam,
+espaço/enter confirma a opção destacada; o mouse também funciona — passar por cima
+destaca (hover), clicar confirma. Só apertar espaço/enter/clicar confirma — navegar
+(seta ou hover) nunca escolhe por acidente. A Engine fica parada nesse ponto até o
+jogador confirmar uma opção.
+
+Cada opção pode ser:
+
+```python
+# só o texto
+choice("Ir para casa", "Ficar aqui")
+
+# (texto, efeitos) -- efeitos é um dict {chave: quantidade}, somado no
+# GameState (via GameState.increment()) quando a opção é confirmada
+choice(
+    ("Ajudar Jef", {"amizade": 1}),
+    ("Ignorar Jef", {"amizade": 0}),
+)
+
+# (texto, efeitos, actions) -- além de alterar o GameState, executa
+# essa lista de Actions imediatamente: ramificação real da história
+choice(
+    ("Sim", {"ajudou": 1}, [speak(jef, "Claro.")]),
+    ("Não", {"ajudou": 0}, [speak(jef, "Nem pensar.")]),
+)
+```
+
+Depois que a Engine processa a Choice, o resultado fica disponível em
+`minha_choice.selected_index` (0, 1, 2, ...) — útil se você guardou a Action numa
+variável e quer checar depois.
+
+### `GameState`
+
+Estado narrativo simples, em memória (sem save/load, sem banco de dados):
+
+```python
+from src.MyNovellib.state import GameState
+
+state = GameState()          # default=0 pra chaves nunca definidas
+state.set("amizade", 10)
+state.get("amizade")         # 10
+state.get("nunca_existiu")   # 0 (o default, não erro/None por acaso)
+state.increment("amizade")   # soma 1 -> 11
+state.increment("amizade", 5)  # soma 5 -> 16
+
+state.set("porta_aberta", True)  # flags booleanas funcionam do mesmo jeito
+```
+
+`GameState(default=algum_valor)` configura o valor padrão pra chaves nunca definidas.
+`get(chave, default=X)` também aceita um default só pra aquela chamada, sobrepondo o
+global.
+
+Pra usar um `GameState` específico (em vez do que a `Engine` cria sozinha), passe pra
+`Engine`:
+
+```python
+state = GameState()
+engine = Engine(state=state)
+engine.run(campo, story)
+
+state.get("amizade")  # o mesmo objeto foi alterado pela história
+```
+
+### `if_state(key, operator, value, actions)`
+
+Executa uma lista de Actions **só se** a condição sobre o `GameState` for verdadeira:
+
+```python
+if_state(
+    "amizade", ">=", 10,
+    [speak(jef, "Eu confio em você.")]
+)
+```
+
+Operadores aceitos: `==` `!=` `>` `<` `>=` `<=`. Funciona com números, strings e
+booleanos (`if_state("porta_aberta", "==", True, [...])`). `if_state` pode aparecer
+dentro de outro `if_state` (condições aninhadas).
+
+### `set_state(key, value)`
+
+Define um valor no `GameState` diretamente — **atribuição**, diferente dos efeitos de
+`choice()` (que sempre somam). Útil pra marcar uma flag fora de uma escolha:
+
+```python
+set_state("viu_final_bom", True)
+```
+
+### Juntando tudo: ramificação real
+
+```python
+story = [
+    speak(ken, "Você vai me ajudar?"),
+
+    choice(
+        ("Ajudar", {"amizade": 5}),
+        ("Ignorar", {"amizade": 0}),
+    ),
+
+    if_state("amizade", ">=", 5, [
+        speak(jef, "Obrigado por ajudar."),
+        set_state("final", "bom"),
+    ]),
+
+    if_state("amizade", "<", 5, [
+        speak(jef, "Tudo bem, eu entendo."),
+        set_state("final", "neutro"),
+    ]),
+]
+```
+
+Os dois `if_state` acima também podiam ter sido escritos direto como a terceira forma
+de `choice()` (ramificação inline) — as duas formas são válidas; use a que ficar mais
+legível pra cada caso.
+
+### Input
+
+Espaço, clique esquerdo, setas e enter são os únicos controles hoje (sem controles
+configuráveis ainda). Um diálogo (`speak`) só reage a espaço/clique; uma `choice()`
+reage a setas, espaço/enter e mouse. Isso é organizado internamente por
+`src/MyNovellib/input.py` (`Input.poll()`), então nenhuma Action nova precisa lidar
+com `pygame.KEYDOWN`/`MOUSEBUTTONDOWN` na mão.
+
 ## Exemplo completo
 
 ```python
@@ -243,6 +373,42 @@ engine = Engine()
 engine.run(campo, story)
 ```
 
+## Exemplo interativo (com escolhas)
+
+Versão resumida de [`exemples/10_gameplay_demo.py`](exemples/10_gameplay_demo.py) —
+o arquivo completo é jogável do início ao fim (2 cenas, 2 caminhos diferentes):
+
+```python
+from src.MyNovellib.state import GameState
+from src.MyNovellib.story import choice, if_state, change_scene
+
+story = [
+    speak(ken, "Ouvi um barulho estranho. Você vem comigo checar?"),
+
+    choice(
+        ("Ajudar Ken", {"coragem": 5}, [
+            speak(jef, "Claro, vamos juntos."),
+        ]),
+        ("Deixar Ken ir sozinho", {"coragem": 0}, [
+            speak(jef, "Acho melhor você ir sozinho dessa vez."),
+        ]),
+    ),
+
+    change_scene(quarto, transition="fade", duration=1.0),
+
+    if_state("coragem", ">=", 5, [
+        speak(ken, "Ainda bem que você veio comigo."),
+    ]),
+
+    if_state("coragem", "<", 5, [
+        speak(jef, "Espero que esteja tudo bem com ele."),
+    ]),
+]
+
+engine = Engine(state=GameState())
+engine.run(campo, story)
+```
+
 ## Exemplos
 
 A pasta [`exemples/`](exemples/) tem um arquivo por função, todos executáveis
@@ -260,6 +426,7 @@ diretamente:
 | `07_move.py` | `move()` — atualização parcial de posição/escala/offset |
 | `08_pause.py` | `pause()` |
 | `09_change_scene.py` | `change_scene()` — troca instantânea e com fade |
+| `10_gameplay_demo.py` | `choice()`, `GameState`, `if_state()` — história jogável com 2 caminhos |
 
 ```bash
 .venv/Scripts/python.exe exemples/01_speak.py
@@ -274,9 +441,13 @@ myNovel/
 │   ├── character.py         # Character
 │   ├── scene.py              # Canvas
 │   ├── dialogue.py           # Dialogue / speak()
-│   ├── story.py               # Action e as demais Actions (emotion, move, enter, exit, pause, change_scene, ...)
-│   ├── transitions.py         # FadeTransition
-│   └── engine.py               # Engine
+│   ├── story.py               # Action e as demais Actions (emotion, move, enter, exit, pause,
+│   │                          # change_scene, choice, if_state, set_state, ...)
+│   ├── state.py                # GameState
+│   ├── choice_ui.py             # ChoiceUI (desenho/hover/clique da Choice)
+│   ├── input.py                  # Input.poll() (QUIT + gesto de avançar, organizados)
+│   ├── transitions.py             # FadeTransition
+│   └── engine.py                   # Engine
 ├── exemples/                  # um exemplo funcional por função
 ├── tests/                      # testes de regressão (sem dependências externas)
 └── main.py                     # ponto de entrada / demo original
@@ -295,8 +466,15 @@ myNovel/
   refatoração maior em vários arquivos.
 - Sprites são recarregados do disco a cada frame (sem cache de imagem) — funciona,
   mas não é o mais performático.
+- **Sem `goto`/`label`** (loop/repetição de trechos da história) — avaliado de
+  propósito e decidido não implementar por enquanto: `choice()` + `GameState` +
+  `if_state()` já cobrem convergência (branches diferentes levando ao mesmo trecho
+  seguinte) e reuso (a mesma lista de Actions em mais de um lugar, como variável
+  Python normal). O único caso que faltaria é repetir/voltar atrás, raro numa visual
+  novel — e um `goto` genérico exigiria achatar a árvore de Actions aninhadas (Choice/
+  if_state) numa sequência indexável, um redesenho grande pra um caso raro.
 
 Ainda **não implementado** (por escolha, não é bug): editor visual, timeline gráfica,
-sistema de escolhas, save/load, rollback, gerenciador de voz avançado, sistema de SFX,
-lip sync, animações complexas, partículas, scripting próprio, exportação para
+save/load, rollback, histórico de escolhas, gerenciador de voz avançado, sistema de
+SFX, lip sync, animações complexas, partículas, scripting próprio, exportação para
 executável, versão web, sistema de plugins, multiplayer.
