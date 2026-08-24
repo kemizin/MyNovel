@@ -117,7 +117,7 @@ assert app.scene_selected_index == 0
 # --- editar Position aplica de verdade (via _apply_scene_field,
 # direto -- equivalente ao <Return>/<FocusOut> do Entry) ---
 app.dirty = False
-app._apply_scene_field(0, "position", "3", app._parse_position)
+app._apply_scene_field(0, "position", "3", int)
 assert placement.position == 3
 assert app.dirty is True
 
@@ -127,10 +127,10 @@ original_showerror = messagebox.showerror
 messagebox.showerror = lambda titulo, msg: erros.append(msg)
 
 try:
-    app._apply_scene_field(0, "position", "5", app._parse_position)
-    app._apply_scene_field(0, "position", "abc", app._parse_position)
-    app._apply_scene_field(0, "scale", "0", app._parse_positive_float)
-    app._apply_scene_field(0, "scale", "-1", app._parse_positive_float)
+    app._apply_scene_field(0, "position", "5", int)
+    app._apply_scene_field(0, "position", "abc", int)
+    app._apply_scene_field(0, "scale", "0", float)
+    app._apply_scene_field(0, "scale", "-1", float)
 finally:
     messagebox.showerror = original_showerror
 
@@ -178,8 +178,8 @@ try:
     app2._on_explorer_select()
 
     cena2 = app2.project.scenes["praca"]
-    app2._apply_scene_field(0, "position", "2", app2._parse_position)
-    app2._apply_scene_field(0, "scale", "0.9", app2._parse_positive_float)
+    app2._apply_scene_field(0, "position", "2", int)
+    app2._apply_scene_field(0, "scale", "0.9", float)
 
     app2.save_project()
     app2.on_close()

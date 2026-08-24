@@ -841,8 +841,9 @@ class StudioApp:
 
     # Adiciona a emoção de verdade -- separado do diálogo, testável
     # direto. Reaproveita CharacterData.add_emotion() (Project System
-    # Update, Waystone 5), inclusive a validação de lá (idle não
-    # vazio).
+    # Update, Waystone 5) inclusive toda a validação de lá (idle e
+    # name não vazios) -- o Studio não valida nada por conta própria,
+    # só mostra o ValueError que vier de lá.
     def add_emotion(self, character_key, name, idle, talking=""):
 
         data = self.project.characters[character_key]
@@ -850,12 +851,6 @@ class StudioApp:
         name = (name or "").strip()
         idle = (idle or "").strip()
         talking = (talking or "").strip() or None
-
-        # CharacterData.add_emotion() só valida "idle" -- "name" vazio
-        # é checado aqui, no nível da interface.
-        if not name:
-            messagebox.showerror(APP_TITLE, "Informe um nome para a emoção.")
-            return False
 
         try:
             data.add_emotion(name, idle=idle, talking=talking)
@@ -1136,11 +1131,11 @@ class StudioApp:
 
         self._build_scene_numeric_field(
             "Position:", placement.position,
-            lambda valor: self._apply_scene_field(index, "position", valor, self._parse_position),
+            lambda valor: self._apply_scene_field(index, "position", valor, int),
         )
         self._build_scene_numeric_field(
             "Scale:", placement.scale,
-            lambda valor: self._apply_scene_field(index, "scale", valor, self._parse_positive_float),
+            lambda valor: self._apply_scene_field(index, "scale", valor, float),
         )
         self._build_scene_emotion_field(placement)
         self._build_scene_numeric_field(
@@ -1195,26 +1190,12 @@ class StudioApp:
 
         combo.bind("<<ComboboxSelected>>", on_select)
 
-    @staticmethod
-    def _parse_position(raw_value):
-
-        valor = int(raw_value)
-
-        if valor not in (1, 2, 3):
-            raise ValueError("Position precisa ser 1, 2 ou 3.")
-
-        return valor
-
-    @staticmethod
-    def _parse_positive_float(raw_value):
-
-        valor = float(raw_value)
-
-        if valor <= 0:
-            raise ValueError("Scale precisa ser maior que zero.")
-
-        return valor
-
+    # `parse` só faz a conversão de tipo (str -> int/float) -- quem valida
+    # o VALOR (position precisa ser 1/2/3, scale precisa ser > 0) é o
+    # próprio SceneCharacter (property setter, ver project/scene_data.py),
+    # não o Studio. `setattr` já passa pela validação de lá, então um
+    # valor ruim levanta ValueError aqui do mesmo jeito que um tipo
+    # inválido -- um único except cobre os dois casos.
     def _apply_scene_field(self, index, field, raw_value, parse):
 
         data = self.project.scenes[self.scene_editor_key]
@@ -1226,13 +1207,13 @@ class StudioApp:
 
         try:
             valor = parse(raw_value)
+            setattr(placement, field, valor)
 
         except (TypeError, ValueError) as error:
             messagebox.showerror(APP_TITLE, f"Valor inválido em {field}: {error}")
             self._render_scene_properties()  # volta pro valor antigo
             return
 
-        setattr(placement, field, valor)
         self.mark_dirty()
 
         self._render_scene_canvas()

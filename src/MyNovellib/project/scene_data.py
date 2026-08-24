@@ -29,22 +29,45 @@ class SceneCharacter:
                 "SceneCharacter precisa de um 'character' (id/nome) não vazio."
             )
 
-        if position not in (1, 2, 3):
-            raise ValueError(
-                f"SceneCharacter.position precisa ser 1, 2 ou 3 (veio {position!r})."
-            )
-
-        if scale <= 0:
-            raise ValueError(
-                f"SceneCharacter.scale precisa ser maior que zero (veio {scale!r})."
-            )
-
         self.character = character
-        self.position = position
-        self.scale = scale
+        self.position = position  # passa pela property -- valida 1/2/3
+        self.scale = scale        # passa pela property -- valida > 0
         self.offset_x = offset_x
         self.offset_y = offset_y
         self.emotion = emotion
+
+    # `position`/`scale` são property (não atributo simples) de propósito:
+    # a validação precisa valer tanto na criação quanto em qualquer edição
+    # posterior (ex.: Scene Editor mudando um valor existente via
+    # `setattr(placement, "position", valor)`) -- um atributo comum só
+    # protegeria a criação, e o Scene Editor edita muito mais do que cria.
+    @property
+    def position(self):
+        return self._position
+
+    @position.setter
+    def position(self, value):
+
+        if value not in (1, 2, 3):
+            raise ValueError(
+                f"Position precisa ser 1, 2 ou 3 (veio {value!r})."
+            )
+
+        self._position = value
+
+    @property
+    def scale(self):
+        return self._scale
+
+    @scale.setter
+    def scale(self, value):
+
+        if value <= 0:
+            raise ValueError(
+                f"Scale precisa ser maior que zero (veio {value!r})."
+            )
+
+        self._scale = value
 
     def to_dict(self):
 
