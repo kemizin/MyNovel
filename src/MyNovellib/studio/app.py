@@ -4,7 +4,7 @@
 # Project System existente (src/MyNovellib/project/).
 
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, ttk
 
 from src.MyNovellib.project.model import Project
 
@@ -110,20 +110,49 @@ class StudioApp:
             button.pack(side=tk.LEFT, padx=2, pady=2)
             self.toolbar_buttons[label] = button
 
-    # --- Área principal -------------------------------------------------
+    # --- Área principal: Project Explorer (esquerda) + Properties (direita) --
+
+    _PLACEHOLDER_TEXT = "Nenhum projeto aberto.\nUse File → Open Project para começar."
 
     def _build_main_area(self):
 
         self.main_area = tk.Frame(self.root)
         self.main_area.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.main_area_placeholder = tk.Label(
-            self.main_area,
-            text="Nenhum projeto aberto.\nUse File → Open Project para começar.",
+        # --- painel PROJECT (árvore de navegação) ---
+        explorer_frame = tk.Frame(self.main_area, width=220)
+        explorer_frame.pack(side=tk.LEFT, fill=tk.Y)
+        explorer_frame.pack_propagate(False)
+
+        tk.Label(
+            explorer_frame, text="PROJECT", anchor="w", font=("", 9, "bold")
+        ).pack(fill=tk.X, padx=4, pady=(4, 0))
+
+        self.explorer = ttk.Treeview(explorer_frame, show="tree")
+        self.explorer.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        self.explorer.bind("<<TreeviewSelect>>", self._on_explorer_select)
+
+        # --- painel PROPERTIES (info do item selecionado) ---
+        properties_frame = tk.Frame(self.main_area)
+        properties_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            properties_frame, text="PROPERTIES", anchor="w", font=("", 9, "bold")
+        ).pack(fill=tk.X, padx=8, pady=(8, 0))
+
+        self.properties_label = tk.Label(
+            properties_frame,
+            text=self._PLACEHOLDER_TEXT,
+            justify=tk.LEFT,
+            anchor="nw",
             fg="gray40",
-            justify=tk.CENTER,
+            padx=8,
+            pady=8,
         )
-        self.main_area_placeholder.pack(expand=True)
+        self.properties_label.pack(fill=tk.BOTH, expand=True)
+
+        self.explorer_frame = explorer_frame
+        self.properties_frame = properties_frame
 
     # --- Status bar -----------------------------------------------------
 
@@ -176,35 +205,122 @@ class StudioApp:
 
         self.root.title(f"{APP_TITLE} — {self.project.name}")
         self.set_status(f'Projeto "{self.project.name}" carregado.')
-        self._refresh_main_area()
+        self._refresh_explorer()
 
-    # Substitui o conteúdo da área principal por um resumo do projeto
-    # carregado. Ainda não é navegável (isso é o Project Explorer, no
-    # próximo Waystone) -- só mostra o que foi pedido: nome, resolução,
-    # cenas e quantidade de assets.
-    def _refresh_main_area(self):
+    # Repovoa o Project Explorer com a árvore do projeto carregado:
+    #
+    #     MeuJogo
+    #     ├── Characters (Jef, Ken, ...)
+    #     ├── Scenes (campo, quarto, ...)
+    #     ├── Stories (intro, ...)
+    #     └── Assets (...)
+    #
+    # Ainda não edita nada -- só navegação. Ao terminar, seleciona a
+    # raiz e mostra o resumo do projeto no painel Properties.
+    def _refresh_explorer(self):
 
-        for widget in self.main_area.winfo_children():
-            widget.destroy()
+        self.explorer.delete(*self.explorer.get_children())
 
         project = self.project
 
+        self.explorer.insert("", "end", iid="project", text=project.name, open=True)
+
+        self._insert_category("Characters", "character", sorted(project.characters))
+        self._insert_category("Scenes", "scene", sorted(project.scenes))
+        self._insert_category("Stories", "story", sorted(project.stories))
+        self._insert_category("Assets", "asset", sorted(project.assets))
+
+        self.explorer.selection_set("project")
+        self._show_properties("project")
+
+    def _insert_category(self, label, kind, keys):
+
+        category_id = f"category:{kind}"
+
+        self.explorer.insert("project", "end", iid=category_id, text=label, open=True)
+
+        for key in keys:
+            self.explorer.insert(category_id, "end", iid=f"{kind}:{key}", text=key)
+
+    def _on_explorer_select(self, event=None):
+
+        selection = self.explorer.selection()
+
+        if not selection:
+            return
+
+        self._show_properties(selection[0])
+
+    def _show_properties(self, iid):
+
+        self.properties_label.config(text=self._describe_selection(iid))
+
+    # Monta o texto do painel Properties pro item selecionado na
+    # árvore -- linguagem simples, sem termos internos (nome/imagem/
+    # emoção, não "asset id"/"registry key").
+    def _describe_selection(self, iid):
+
+        project = self.project
+
+        if iid == "project":
+            return self._project_summary_text()
+
+        if iid.startswith("category:"):
+            return self._category_summary_text(iid.split(":", 1)[1])
+
+        kind, _, key = iid.partition(":")
+
+        if kind == "character":
+            data = project.characters[key]
+            emocoes = ", ".join(sorted(data.emotions)) or "(nenhuma)"
+            return f"Personagem: {data.name}\nEmoções: {emocoes}"
+
+        if kind == "scene":
+            data = project.scenes[key]
+            return (
+                f"Cena: {data.name}\n"
+                f"Fundo: {data.background or '(nenhum)'}\n"
+                f"Música: {data.music or '(nenhuma)'}\n"
+                f"Personagens na cena: {len(data.characters)}"
+            )
+
+        if kind == "story":
+            data = project.stories[key]
+            return f"História: {data.name}\nAções: {len(data.actions)}"
+
+        if kind == "asset":
+            data = project.assets[key]
+            return f"Asset: {data.id}\nTipo: {data.type}\nCaminho: {data.path}"
+
+        return ""
+
+    def _project_summary_text(self):
+
+        project = self.project
         largura, altura = project.resolution
         nomes_das_cenas = ", ".join(sorted(project.scenes)) or "(nenhuma)"
 
-        texto = (
+        return (
             f"Nome: {project.name}\n"
             f"Resolução: {largura} × {altura}\n"
             f"Cenas: {nomes_das_cenas}\n"
             f"Assets: {len(project.assets)}"
         )
 
-        label = tk.Label(
-            self.main_area, text=texto, justify=tk.LEFT, anchor="nw", padx=16, pady=16
-        )
-        label.pack(fill=tk.BOTH, expand=True)
+    def _category_summary_text(self, kind):
 
-        self.main_area_placeholder = None
+        project = self.project
+
+        rotulos = {
+            "character": ("Personagens", project.characters),
+            "scene": ("Cenas", project.scenes),
+            "story": ("Histórias", project.stories),
+            "asset": ("Assets", project.assets),
+        }
+
+        nome, colecao = rotulos[kind]
+
+        return f"{nome}: {len(colecao)}"
 
     # --- Ações --------------------------------------------------------
 

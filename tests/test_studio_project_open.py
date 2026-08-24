@@ -39,16 +39,13 @@ assert app.project.name == "Project Demo"
 assert app.root.title() == f"{APP_TITLE} — Project Demo"
 assert "Project Demo" in app.status_bar.cget("text")
 
-# --- area principal mostra nome, resolucao, cenas e quantidade de assets ---
-main_area_text = ""
-for widget in app.main_area.winfo_children():
-    if isinstance(widget, tk.Label):
-        main_area_text += widget.cget("text")
+# --- painel Properties mostra nome, resolucao, cenas e quantidade de assets ---
+properties_text = app.properties_label.cget("text")
 
-assert "Project Demo" in main_area_text
-assert "960" in main_area_text and "540" in main_area_text
-assert "praca" in main_area_text  # nome da cena
-assert "3" in main_area_text      # quantidade de assets (registrados no demo)
+assert "Project Demo" in properties_text
+assert "960" in properties_text and "540" in properties_text
+assert "praca" in properties_text  # nome da cena
+assert "3" in properties_text      # quantidade de assets (registrados no demo)
 
 # --- caminho invalido: nao derruba a aplicacao, mostra erro (sem
 # abrir um dialog de verdade -- messagebox.showerror e substituido por
