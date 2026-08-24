@@ -58,6 +58,11 @@ class Project:
         self.assets = {}
         self.characters = {}
 
+        # pasta de onde o projeto foi carregado (setado por load()) --
+        # usado por create_runtime() pra resolver caminhos relativos
+        # de asset. None pra um Project montado em memória.
+        self.loaded_from = None
+
     def __repr__(self):
 
         return (
@@ -205,4 +210,22 @@ class Project:
                     f"Arquivo de projeto inválido (JSON malformado): {path}"
                 ) from error
 
-        return cls.from_dict(data)
+        project = cls.from_dict(data)
+        project.loaded_from = os.path.dirname(os.path.abspath(path))
+
+        return project
+
+    # --- Runtime ---------------------------------------------------------
+    #
+    # Import de src.MyNovellib.project.runtime_loader fica de propósito
+    # DENTRO do método (não no topo do arquivo): model.py continua sem
+    # importar pygame só de existir a classe Project -- só quando
+    # create_runtime() é de fato CHAMADO é que a camada de Runtime
+    # (Character/Canvas/Engine) entra em cena.
+    def create_runtime(self, directory=None):
+
+        from src.MyNovellib.project.runtime_loader import create_runtime
+
+        directory = directory or self.loaded_from or os.getcwd()
+
+        return create_runtime(self, directory)
