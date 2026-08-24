@@ -272,6 +272,33 @@ try:
     except StudioError:
         pass
 
+    # --- add_story_action: reaproveita StoryData.add_action()
+    # (tipo suportado + campos obrigatórios) ---
+    core.create_story("Capítulo Extra")
+    core.dirty = False
+
+    core.add_story_action("capitulo_extra", "speak", character="mika", text="Oi!")
+    assert len(core.project.stories["capitulo_extra"].actions) == 1
+    assert core.project.stories["capitulo_extra"].actions[0].type == "speak"
+    assert core.dirty is True
+
+    core.add_story_action("capitulo_extra", "pause", duration=1.5)
+    assert len(core.project.stories["capitulo_extra"].actions) == 2
+
+    try:
+        core.add_story_action("capitulo_extra", "choice", options=["A"])
+        assert False, "esperava StudioError (tipo não suportado)"
+    except StudioError:
+        pass
+
+    try:
+        core.add_story_action("capitulo_extra", "speak", character="mika")  # falta "text"
+        assert False, "esperava StudioError (campo obrigatório faltando)"
+    except StudioError:
+        pass
+
+    assert len(core.project.stories["capitulo_extra"].actions) == 2  # nenhum erro adicionou nada
+
 finally:
     shutil.rmtree(tmp_dir, ignore_errors=True)
 

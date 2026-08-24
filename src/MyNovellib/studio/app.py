@@ -714,13 +714,15 @@ class StudioApp:
 
     # --- Story Editor -----------------------------------------------------
     #
-    # Primeiro passo: lista ordenada e somente-leitura das Actions da
-    # história (a ordem é a ordem de execução -- por isso Listbox, não
-    # Treeview: reordenar itens de uma lista plana mais tarde é
-    # simples de fazer com delete/insert). Cada linha usa
-    # ActionData.describe() (project/story_data.py) -- o Studio não
-    # reimplementa esse texto. Adicionar/editar/remover/reordenar
-    # Action ainda não existe (próximos waystones).
+    # Lista ordenada das Actions da história (a ordem é a ordem de
+    # execução -- por isso Listbox, não Treeview: reordenar itens de
+    # uma lista plana mais tarde, waystone seguinte, é simples de
+    # fazer com delete/insert). Cada linha usa ActionData.describe()
+    # (project/story_data.py) -- o Studio não reimplementa esse texto.
+    # "+ Add Action" adiciona ao final; editar/remover/reordenar uma
+    # Action existente ainda não existe (próximos waystones).
+
+    ACTION_TYPES = ("speak", "emotion", "move", "enter", "exit", "pause")
 
     def _build_story_editor(self, story_key):
 
@@ -749,10 +751,16 @@ class StudioApp:
 
         tk.Button(
             parent,
+            text="+ Add Action",
+            command=lambda: self._open_add_action_dialog(story_key),
+        ).pack(anchor="w", padx=8, pady=(8, 4))
+
+        tk.Button(
+            parent,
             text="Delete Story",
             fg="red3",
             command=lambda: self._delete_story(story_key),
-        ).pack(anchor="w", padx=8, pady=(8, 8))
+        ).pack(anchor="w", padx=8, pady=(0, 8))
 
     def _delete_story(self, story_key):
 
@@ -770,6 +778,225 @@ class StudioApp:
 
         self._update_title()  # o Core já marcou dirty
         self._refresh_explorer()
+
+    # Diálogo com campos que mudam de acordo com o tipo escolhido --
+    # mesma ideia do Add Emotion (nome/idle/talking), só que aqui o
+    # conjunto de campos depende do tipo de Action. `fields_frame` é
+    # reconstruído a cada troca de tipo; `field_vars` guarda os
+    # StringVar atuais (rebuild_fields() esvazia e repopula o dict).
+    def _open_add_action_dialog(self, story_key):
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Add Action")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        pad = {"padx": 8, "pady": 4}
+
+        type_var = tk.StringVar(value=self.ACTION_TYPES[0])
+
+        tk.Label(dialog, text="Type:").grid(row=0, column=0, sticky="w", **pad)
+        type_combo = ttk.Combobox(
+            dialog, textvariable=type_var, values=self.ACTION_TYPES,
+            state="readonly", width=24,
+        )
+        type_combo.grid(row=0, column=1, sticky="we", **pad)
+
+        fields_frame = tk.Frame(dialog)
+        fields_frame.grid(row=1, column=0, columnspan=2, sticky="we")
+
+        field_vars = {}
+
+        def rebuild_fields(event=None):
+            for widget in fields_frame.winfo_children():
+                widget.destroy()
+            field_vars.clear()
+            self._build_action_type_fields(fields_frame, type_var.get(), field_vars)
+
+        type_combo.bind("<<ComboboxSelected>>", rebuild_fields)
+        rebuild_fields()
+
+        def on_add():
+
+            try:
+                kwargs = self._action_kwargs_from_vars(type_var.get(), field_vars)
+
+            except ValueError as error:
+                messagebox.showerror(APP_TITLE, str(error))
+                return
+
+            criado = self.add_story_action(story_key, type_var.get(), **kwargs)
+
+            if criado:
+                dialog.destroy()
+
+        tk.Button(dialog, text="Add", command=on_add).grid(
+            row=2, column=0, columnspan=2, pady=(12, 8)
+        )
+
+        self.add_action_dialog = dialog
+
+        return dialog
+
+    # Monta os campos de um tipo de Action em `parent`, guardando um
+    # StringVar por campo em `field_vars` (chave = nome do campo, igual
+    # ActionData.fields usa). "Character" aparece pra todos os tipos
+    # menos "pause" -- sempre um combobox com os personagens do
+    # projeto (não dá pra digitar um personagem que não existe).
+    def _build_action_type_fields(self, parent, action_type, field_vars):
+
+        pad = {"padx": 8, "pady": 4}
+        row = 0
+        character_combo = None
+
+        if action_type != "pause":
+
+            tk.Label(parent, text="Character:").grid(row=row, column=0, sticky="w", **pad)
+
+            character_var = tk.StringVar()
+            character_combo = ttk.Combobox(
+                parent, textvariable=character_var,
+                values=sorted(self.project.characters), state="readonly", width=22,
+            )
+            character_combo.grid(row=row, column=1, sticky="we", **pad)
+            field_vars["character"] = character_var
+            row += 1
+
+        if action_type == "speak":
+
+            tk.Label(parent, text="Text:").grid(row=row, column=0, sticky="w", **pad)
+            text_var = tk.StringVar()
+            tk.Entry(parent, textvariable=text_var, width=30).grid(
+                row=row, column=1, sticky="we", **pad
+            )
+            field_vars["text"] = text_var
+
+        elif action_type == "emotion":
+
+            tk.Label(parent, text="Emotion:").grid(row=row, column=0, sticky="w", **pad)
+            emotion_var = tk.StringVar()
+            emotion_combo = ttk.Combobox(
+                parent, textvariable=emotion_var, values=(), state="disabled", width=22,
+            )
+            emotion_combo.grid(row=row, column=1, sticky="we", **pad)
+            field_vars["emotion"] = emotion_var
+
+            # a lista de emoções depende de qual personagem está
+            # escolhido -- atualiza sempre que o personagem mudar.
+            def on_character_change(event=None):
+
+                character_data = self.project.characters.get(field_vars["character"].get())
+                opcoes = sorted(character_data.emotions) if character_data else []
+
+                emotion_combo.config(values=opcoes, state="readonly" if opcoes else "disabled")
+                emotion_var.set("")
+
+            character_combo.bind("<<ComboboxSelected>>", on_character_change)
+
+        elif action_type in ("move", "enter"):
+
+            for campo, rotulo in (
+                ("position", "Position:"), ("scale", "Scale:"),
+                ("offset_x", "Offset X:"), ("offset_y", "Offset Y:"),
+            ):
+                tk.Label(parent, text=rotulo).grid(row=row, column=0, sticky="w", **pad)
+                var = tk.StringVar()
+                tk.Entry(parent, textvariable=var, width=12).grid(
+                    row=row, column=1, sticky="w", **pad
+                )
+                field_vars[campo] = var
+                row += 1
+
+        elif action_type == "pause":
+
+            tk.Label(parent, text="Duration (s):").grid(row=row, column=0, sticky="w", **pad)
+            duration_var = tk.StringVar()
+            tk.Entry(parent, textvariable=duration_var, width=12).grid(
+                row=row, column=1, sticky="w", **pad
+            )
+            field_vars["duration"] = duration_var
+
+        # "exit" não tem campo além de Character, já montado acima.
+
+    # Lê os StringVar de `field_vars` e monta os kwargs pra
+    # add_story_action()/StoryData.add_action() -- position/scale/
+    # offset em move/enter são opcionais (campo em branco = não entra
+    # nos kwargs); position é obrigatório em enter (ActionData exige).
+    # Levanta ValueError com mensagem pronta pra mostrar em qualquer
+    # campo inválido -- é o Studio validando ENTRADA de diálogo (tipo/
+    # formato), não regra de domínio (isso já mora no Project System,
+    # ver Fase A do hardening).
+    def _action_kwargs_from_vars(self, action_type, field_vars):
+
+        kwargs = {}
+
+        if "character" in field_vars:
+            character = field_vars["character"].get()
+            if not character:
+                raise ValueError("Escolha um personagem.")
+            kwargs["character"] = character
+
+        if action_type == "speak":
+
+            text = field_vars["text"].get()
+            if not text.strip():
+                raise ValueError("Informe o texto da fala.")
+            kwargs["text"] = text
+
+        elif action_type == "emotion":
+
+            emotion = field_vars["emotion"].get()
+            if not emotion:
+                raise ValueError("Escolha uma emoção.")
+            kwargs["emotion"] = emotion
+
+        elif action_type in ("move", "enter"):
+
+            posicao = field_vars["position"].get().strip()
+
+            if action_type == "enter" and not posicao:
+                raise ValueError("Position é obrigatório em enter.")
+
+            if posicao:
+                kwargs["position"] = int(posicao)
+
+            escala = field_vars["scale"].get().strip()
+            if escala:
+                kwargs["scale"] = float(escala)
+
+            offset_x = field_vars["offset_x"].get().strip()
+            if offset_x:
+                kwargs["offset_x"] = int(offset_x)
+
+            offset_y = field_vars["offset_y"].get().strip()
+            if offset_y:
+                kwargs["offset_y"] = int(offset_y)
+
+        elif action_type == "pause":
+
+            duracao = field_vars["duration"].get().strip()
+            if not duracao:
+                raise ValueError("Informe a duração.")
+            kwargs["duration"] = float(duracao)
+
+        return kwargs
+
+    # Adiciona a Action de verdade -- separado do diálogo, testável
+    # direto. Repassa pro Core; ao terminar, reconstrói o Story Editor
+    # pra mostrar a Action nova na lista.
+    def add_story_action(self, story_key, action_type, **fields):
+
+        try:
+            self.core.add_story_action(story_key, action_type, **fields)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return False
+
+        self._update_title()  # o Core já marcou dirty
+        self._show_properties(f"story:{story_key}")
+
+        return True
 
     # Resumo somente-leitura: thumbnail (se aplicável) + texto.
     def _build_readonly_properties(self, text, thumbnail_iid):

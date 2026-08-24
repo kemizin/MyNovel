@@ -300,3 +300,22 @@ class StudioCore:
 
         del self.project.stories[story_key]
         self.dirty = True
+
+    # Adiciona uma Action ao final da história. Reaproveita
+    # StoryData.add_action() (que por sua vez usa ActionData -- tipo
+    # suportado e campos obrigatórios já validados lá); o Core só
+    # traduz o ValueError em StudioError. Não valida que o
+    # personagem citado existe -- quem monta os campos (o diálogo Add
+    # Action, no Studio) só deixa escolher personagens que já existem,
+    # via combobox.
+    def add_story_action(self, story_key, action_type, **fields):
+
+        story = self.project.stories[story_key]
+
+        try:
+            story.add_action(action_type, **fields)
+
+        except ValueError as error:
+            raise StudioError(str(error))
+
+        self.dirty = True
