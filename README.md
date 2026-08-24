@@ -584,6 +584,12 @@ criar e editar projetos sem escrever Python.
 - O Project System (`src/MyNovellib/project/`) continua sem importar Tkinter ou
   Pygame — o Studio é só mais um consumidor dessa camada de dados, como o Runtime já
   era.
+- Dentro do próprio Studio, `src/MyNovellib/studio/core.py` (`StudioCore`) concentra
+  toda a lógica de validar/criar/editar/salvar — sem nenhuma dependência de Tkinter.
+  `src/MyNovellib/studio/app.py` (`StudioApp`) é a camada fina por cima: só menu,
+  diálogo e widget, chamando o Core e mostrando o resultado. Existe pra uma futura
+  interface diferente (uma versão Web, por exemplo) poder reaproveitar essa lógica
+  em vez de reescrevê-la.
 
 ### Abrindo o Studio
 
@@ -595,24 +601,36 @@ criar e editar projetos sem escrever Python.
 
 1. **File → New Project...** — pede nome, pasta e resolução, cria a estrutura de
    pastas (`assets/`, `scenes/`, `stories/`, `project.mynovel`) e já abre o projeto
-   recém-criado. Ou **File → Open Project...** pra abrir um `project.mynovel`
+   recém-criado, vazio. Ou **File → Open Project...** pra abrir um `project.mynovel`
    existente.
-2. **Project Explorer** (aba "Project" da barra lateral) — Characters, Scenes,
-   Stories e Assets do projeto em árvore. Clicar num personagem ou cena abre o editor
+2. **Edit → New Character.../New Scene.../New Story...** — cada um pede só o
+   essencial (nome; a cena também pede o background) e já abre o editor
+   correspondente, pronto pra completar. É como um projeto vazio ganha conteúdo:
+   sem isso, "New Project" sozinho não dava em nada editável pela interface.
+3. **Project Explorer** (aba "Project" da barra lateral) — Characters, Scenes,
+   Stories e Assets do projeto em árvore. Clicar num item abre o editor
    correspondente no painel Properties; qualquer outra seleção mostra um resumo
    somente-leitura.
-3. **Character Editor** — nome do personagem, e uma linha por emoção com os sprites
+4. **Character Editor** — nome do personagem, e uma linha por emoção com os sprites
    (idle/talking, com botão "Browse...") e um botão "Remove Emotion". "+ Add Emotion"
-   abre um diálogo pra cadastrar uma nova emoção.
-4. **Scene Editor** — preview da cena (fundo + personagens posicionados) num canvas;
+   abre um diálogo pra cadastrar uma nova emoção; "Delete Character" remove o
+   personagem inteiro (com confirmação, e bloqueado se ele estiver em uso em alguma
+   cena ou história).
+5. **Scene Editor** — preview da cena (fundo + personagens posicionados) num canvas;
    arrastar um personagem no preview ajusta `offset_x`/`offset_y` em tempo real, e o
    painel ao lado tem campos "Position", "Scale", "Offset X", "Offset Y" e a emoção
-   inicial de cada personagem da cena.
-5. **File → Save** (ou **Save As...** pra salvar em outro lugar) — grava o
+   inicial de cada personagem da cena. "Delete Scene" remove a cena (com
+   confirmação).
+6. **Story Editor** — lista ordenada das Actions da história (a ordem é a ordem de
+   execução). "+ Add Action" escolhe um tipo (`speak`/`emotion`/`move`/`enter`/
+   `exit`/`pause`) e mostra só os campos daquele tipo; clicar numa Action da lista
+   abre os mesmos campos pra editar ("Update Action"), remover ("Remove Action") ou
+   reordenar ("▲ Move Up"/"▼ Move Down"). "Delete Story" remove a história inteira.
+7. **File → Save** (ou **Save As...** pra salvar em outro lugar) — grava o
    `project.mynovel` com as edições. O título da janela mostra `*` quando há
    alterações não salvas (ex.: `MyNovel Studio — MeuJogo *`), e some assim que salva;
    fechar com alterações pendentes pergunta se quer salvar antes.
-6. **▶ Play** (toolbar ou Build → Play) — roda o projeto atual pela Engine de
+8. **▶ Play** (toolbar ou Build → Play) — roda o projeto atual pela Engine de
    verdade, numa janela separada; o Studio continua aberto e volta ao normal quando o
    jogo termina.
 
@@ -625,16 +643,18 @@ imagens.
 [`exemples/studio_demo/`](exemples/studio_demo/) é um projeto pequeno (1 personagem,
 1 cena, 2 falas — o foco é o fluxo, não o tamanho da história) já pronto pra abrir no
 Studio (**File → Open Project...** → `exemples/studio_demo/project.mynovel`) e seguir
-o fluxo inteiro na mão: navegar o Explorer, editar o personagem e a cena, salvar, e
-dar Play.
+o fluxo inteiro na mão: navegar o Explorer, editar o personagem e a cena, adicionar
+uma fala nova pela Story Editor, salvar, e dar Play.
 
 ### O que o Studio ainda não faz
 
-Criar ou remover personagens/cenas pela interface (hoje só edita os que já existem no
-projeto), editor de Diálogo/Escolha, Timeline, editor de Animação, editor de
-Voz/Áudio, Node Editor (fluxo de história visual), Build/Export, empacotamento pra
-Windows, versão web, colaboração/nuvem, plugins, temas, marketplace. Nada disso é bug
-— é escopo definido pra essa fase.
+Timeline gráfica, editor de Animação, editor de Voz/Áudio avançado, Node Editor
+(fluxo de história visual), Choice Editor (`choice()`/`GameState`/`if_state()` ainda
+só existem escritos em Python ou direto no `.mynovel` — o Story Editor cobre hoje o
+mesmo subconjunto de Actions que o Project Data já suporta: `speak`, `emotion`,
+`move`, `enter`, `exit`, `pause`), Build/Export, empacotamento pra Windows, versão
+web, colaboração/nuvem, plugins, temas, marketplace. Nada disso é bug — é escopo
+definido pra essa fase.
 
 ## Exemplos
 
@@ -688,6 +708,7 @@ myNovel/
 │   │   ├── action_factory.py               # ActionData -> Actions de Runtime
 │   │   └── runtime_loader.py                # ProjectRuntime (Project -> Engine)
 │   └── studio/                       # MyNovel Studio -- Tkinter, edita Project Data
+│       ├── core.py                         # StudioCore (lógica, sem tkinter)
 │       └── app.py                          # StudioApp (janela, menus, editores, Play)
 ├── exemples/                  # um exemplo funcional por função + project_demo/ + studio_demo/
 ├── tests/                      # testes de regressão (sem dependências externas)
