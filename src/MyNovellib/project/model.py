@@ -6,6 +6,7 @@ import json
 import os
 
 from src.MyNovellib.project.assets import Asset
+from src.MyNovellib.project.character_data import CharacterData
 
 # Formato/versão do arquivo de projeto. `version` viaja com o projeto
 # desde já pra permitir migração no futuro -- nenhuma migração é
@@ -50,11 +51,12 @@ class Project:
         self.version = version
 
         # Guardados por nome/id -> dado, pra busca O(1). As classes de
-        # dado (SceneData, StoryData, Asset, ...) chegam nos próximos
-        # Waystones -- por enquanto estes dicts ficam vazios.
+        # dado (SceneData, StoryData, ...) chegam nos próximos
+        # Waystones -- por enquanto scenes/stories ficam vazios.
         self.scenes = {}
         self.stories = {}
         self.assets = {}
+        self.characters = {}
 
     def __repr__(self):
 
@@ -112,6 +114,10 @@ class Project:
                 key: _to_serializable(value)
                 for key, value in self.assets.items()
             },
+            "characters": {
+                key: _to_serializable(value)
+                for key, value in self.characters.items()
+            },
         }
 
     @classmethod
@@ -146,11 +152,16 @@ class Project:
         project.scenes = dict(data.get("scenes", {}))
         project.stories = dict(data.get("stories", {}))
 
-        # assets já tem uma classe de dado de verdade (Asset) --
+        # assets/characters já têm classes de dado de verdade --
         # reconstrói objetos, não deixa como dict cru.
         project.assets = {
             key: Asset.from_dict(value)
             for key, value in data.get("assets", {}).items()
+        }
+
+        project.characters = {
+            key: CharacterData.from_dict(value)
+            for key, value in data.get("characters", {}).items()
         }
 
         return project
