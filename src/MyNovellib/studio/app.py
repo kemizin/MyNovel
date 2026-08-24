@@ -113,35 +113,62 @@ class StudioApp:
             button.pack(side=tk.LEFT, padx=2, pady=2)
             self.toolbar_buttons[label] = button
 
-    # --- Área principal: Project Explorer (esquerda) + Properties (direita) --
+    # --- Área principal: sidebar (Project / Assets) + Properties (direita) --
 
     _PLACEHOLDER_TEXT = "Nenhum projeto aberto.\nUse File → Open Project para começar."
+
+    # tipo de Asset -> categoria mostrada no Asset Browser
+    ASSET_CATEGORY_LABELS = {
+        "character_sprite": "Characters",
+        "background": "Backgrounds",
+        "music": "Music",
+        "voice": "Voices",
+        "sfx": "SFX",
+    }
+
+    # tipos de asset que têm imagem (e por isso podem ter thumbnail)
+    _IMAGE_ASSET_TYPES = {"character_sprite", "background"}
 
     def _build_main_area(self):
 
         self.main_area = tk.Frame(self.root)
         self.main_area.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        # --- painel PROJECT (árvore de navegação) ---
-        explorer_frame = tk.Frame(self.main_area, width=220)
-        explorer_frame.pack(side=tk.LEFT, fill=tk.Y)
-        explorer_frame.pack_propagate(False)
+        # --- sidebar com abas: PROJECT (árvore) e ASSETS (asset browser) ---
+        sidebar_frame = tk.Frame(self.main_area, width=240)
+        sidebar_frame.pack(side=tk.LEFT, fill=tk.Y)
+        sidebar_frame.pack_propagate(False)
 
-        tk.Label(
-            explorer_frame, text="PROJECT", anchor="w", font=("", 9, "bold")
-        ).pack(fill=tk.X, padx=4, pady=(4, 0))
+        self.sidebar = ttk.Notebook(sidebar_frame)
+        self.sidebar.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
-        self.explorer = ttk.Treeview(explorer_frame, show="tree")
-        self.explorer.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        project_tab = tk.Frame(self.sidebar)
+        self.sidebar.add(project_tab, text="Project")
+
+        self.explorer = ttk.Treeview(project_tab, show="tree")
+        self.explorer.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.explorer.bind("<<TreeviewSelect>>", self._on_explorer_select)
 
-        # --- painel PROPERTIES (info do item selecionado) ---
+        assets_tab = tk.Frame(self.sidebar)
+        self.sidebar.add(assets_tab, text="Assets")
+
+        self.asset_tree = ttk.Treeview(assets_tab, show="tree")
+        self.asset_tree.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+        self.asset_tree.bind("<<TreeviewSelect>>", self._on_asset_tree_select)
+
+        # --- painel PROPERTIES (info + thumbnail do item selecionado) ---
         properties_frame = tk.Frame(self.main_area)
         properties_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         tk.Label(
             properties_frame, text="PROPERTIES", anchor="w", font=("", 9, "bold")
         ).pack(fill=tk.X, padx=8, pady=(8, 0))
+
+        # thumbnail: só aparece quando o item selecionado tem imagem.
+        # Nenhuma imagem é carregada até o usuário selecionar algo
+        # (lazy loading) -- ver _update_properties_thumbnail().
+        self.properties_image_label = tk.Label(properties_frame)
+        self.properties_image_label.pack(padx=8, pady=(8, 0))
 
         self.properties_label = tk.Label(
             properties_frame,
@@ -154,7 +181,7 @@ class StudioApp:
         )
         self.properties_label.pack(fill=tk.BOTH, expand=True)
 
-        self.explorer_frame = explorer_frame
+        self.explorer_frame = sidebar_frame
         self.properties_frame = properties_frame
 
     # --- Status bar -----------------------------------------------------
@@ -327,6 +354,7 @@ class StudioApp:
         self.dirty = False
         self._set_save_enabled(True)
         self._refresh_explorer()
+        self._refresh_asset_browser()
 
     def _set_save_enabled(self, enabled):
 
@@ -388,9 +416,108 @@ class StudioApp:
 
         self._show_properties(selection[0])
 
+    # --- Asset Browser --------------------------------------------------
+    #
+    # Painel ASSETS: os assets registrados no projeto, agrupados por
+    # categoria (Characters/Backgrounds/Music/Voices/SFX). Só
+    # visualização -- nenhum editor de asset ainda. A lista em si é só
+    # texto (rápida, não abre nenhum arquivo); a imagem só é carregada
+    # quando um asset É SELECIONADO (thumbnail sob demanda -- nunca
+    # carrega tudo de uma vez).
+
+    def _refresh_asset_browser(self):
+
+        self.asset_tree.delete(*self.asset_tree.get_children())
+
+        project = self.project
+        por_categoria = {tipo: [] for tipo in self.ASSET_CATEGORY_LABELS}
+        outros = []
+
+        for asset_id, asset in project.assets.items():
+            if asset.type in por_categoria:
+                por_categoria[asset.type].append(asset_id)
+            else:
+                outros.append(asset_id)
+
+        for tipo, label in self.ASSET_CATEGORY_LABELS.items():
+            self._insert_asset_category(f"assetcat:{tipo}", label, sorted(por_categoria[tipo]))
+
+        if outros:
+            self._insert_asset_category("assetcat:other", "Other", sorted(outros))
+
+    def _insert_asset_category(self, category_id, label, asset_ids):
+
+        self.asset_tree.insert("", "end", iid=category_id, text=label, open=True)
+
+        for asset_id in asset_ids:
+            self.asset_tree.insert(category_id, "end", iid=f"asset:{asset_id}", text=asset_id)
+
+    def _on_asset_tree_select(self, event=None):
+
+        selection = self.asset_tree.selection()
+
+        if not selection:
+            return
+
+        self._show_properties(selection[0])
+
     def _show_properties(self, iid):
 
         self.properties_label.config(text=self._describe_selection(iid))
+        self._update_properties_thumbnail(iid)
+
+    # Mostra a thumbnail do asset selecionado (se ele tiver imagem) no
+    # painel Properties, ou some com a thumbnail se não tiver.
+    # tkinter.PhotoImage (nativo, sem Pillow) -- suporta PNG direto.
+    def _update_properties_thumbnail(self, iid):
+
+        image = self._load_thumbnail(iid)
+
+        self.properties_image_label.config(image=image or "")
+        self.properties_image_label.image = image  # guarda a referência (senão o Tk descarta)
+
+    def _load_thumbnail(self, iid):
+
+        if not iid.startswith("asset:") or self.project is None:
+            return None
+
+        asset = self.project.assets.get(iid.split(":", 1)[1])
+
+        if asset is None or asset.type not in self._IMAGE_ASSET_TYPES:
+            return None
+
+        path = self._resolve_project_path(asset.path)
+
+        if not os.path.isfile(path):
+            return None
+
+        try:
+            image = tk.PhotoImage(file=path)
+
+        except tk.TclError:
+            return None  # formato que o tkinter não sabe abrir (ex: JPEG)
+
+        maior_lado = max(image.width(), image.height())
+        fator = max(1, maior_lado // 96)
+
+        if fator > 1:
+            image = image.subsample(fator, fator)
+
+        return image
+
+    # Caminho guardado no projeto (relativo à pasta do projeto) ->
+    # caminho de verdade, igual à resolução usada pelo Runtime
+    # (project/runtime_loader.py), sem precisar importar aquele
+    # módulo aqui (que puxaria Character/Canvas/Engine/pygame só pra
+    # mostrar uma thumbnail).
+    def _resolve_project_path(self, path):
+
+        if os.path.isabs(path):
+            return path
+
+        base = (self.project.loaded_from if self.project else None) or os.getcwd()
+
+        return os.path.join(base, path)
 
     # Monta o texto do painel Properties pro item selecionado na
     # árvore -- linguagem simples, sem termos internos (nome/imagem/
@@ -404,6 +531,12 @@ class StudioApp:
 
         if iid.startswith("category:"):
             return self._category_summary_text(iid.split(":", 1)[1])
+
+        if iid.startswith("assetcat:"):
+            tipo = iid.split(":", 1)[1]
+            label = self.ASSET_CATEGORY_LABELS.get(tipo, "Other")
+            quantidade = len(self.asset_tree.get_children(iid))
+            return f"{label}: {quantidade}"
 
         kind, _, key = iid.partition(":")
 
