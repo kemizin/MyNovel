@@ -21,6 +21,7 @@ import unicodedata
 from src.MyNovellib.project.model import Project
 from src.MyNovellib.project.directory import create_project
 from src.MyNovellib.project.character_data import CharacterData
+from src.MyNovellib.project.scene_data import SceneData
 
 
 # Erro de uma operação do Core -- a mensagem já vem pronta pra
@@ -178,6 +179,28 @@ class StudioCore:
         self.dirty = True
 
     # --- Scene -------------------------------------------------------
+
+    # Cria um SceneData novo. `background` é opcional (SceneData aceita
+    # None -- uma cena sem fundo ainda renderiza, só mostra o canvas
+    # vazio) mas normalmente vem preenchido: diferente do personagem,
+    # hoje não existe campo no Scene Editor pra trocar o background
+    # depois da criação. Devolve a chave gerada.
+    def create_scene(self, name, background=""):
+
+        name = (name or "").strip()
+        background = (background or "").strip() or None
+
+        try:
+            scene = SceneData(name=name, background=background)
+
+        except ValueError as error:
+            raise StudioError(str(error))
+
+        key = _generate_key(name, self.project.scenes, fallback="cena")
+        self.project.scenes[key] = scene
+        self.dirty = True
+
+        return key
 
     # `parse` só faz a conversão de tipo (str -> int/float, tipicamente
     # vindo de um Entry) -- quem valida o VALOR (position precisa ser

@@ -65,6 +65,9 @@ class StudioApp:
         edit_menu.add_command(
             label="New Character...", command=self.new_character, state=tk.DISABLED
         )
+        edit_menu.add_command(
+            label="New Scene...", command=self.new_scene, state=tk.DISABLED
+        )
         menubar.add_cascade(label="Edit", menu=edit_menu)
 
         scene_menu = tk.Menu(menubar, tearoff=False)
@@ -352,6 +355,77 @@ class StudioApp:
 
         return True
 
+    # --- Nova cena ----------------------------------------------------
+    #
+    # Mesmo princípio: new_scene() só abre o diálogo; create_scene(...)
+    # faz o trabalho de verdade. Background é pedido aqui na criação
+    # (diferente do personagem/emoção) porque, ao contrário do
+    # Character Editor, o Scene Editor ainda não tem campo nenhum pra
+    # trocar o background depois -- sem perguntar agora, não teria
+    # como definir isso pela interface.
+
+    def new_scene(self):
+        self._open_new_scene_dialog()
+
+    def _open_new_scene_dialog(self):
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("New Scene")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        name_var = tk.StringVar()
+        background_var = tk.StringVar()
+
+        pad = {"padx": 8, "pady": 4}
+
+        tk.Label(dialog, text="Name:").grid(row=0, column=0, sticky="w", **pad)
+        entry = tk.Entry(dialog, textvariable=name_var, width=28)
+        entry.grid(row=0, column=1, sticky="we", **pad)
+        entry.focus_set()
+
+        tk.Label(dialog, text="Background:").grid(row=1, column=0, sticky="w", **pad)
+        tk.Entry(dialog, textvariable=background_var, width=28).grid(
+            row=1, column=1, sticky="we", **pad
+        )
+        tk.Button(
+            dialog, text="Browse...", command=lambda: self._browse_sprite(background_var)
+        ).grid(row=1, column=2, **pad)
+
+        def on_create():
+            criado = self.create_scene(name_var.get(), background_var.get())
+            if criado:
+                dialog.destroy()
+
+        tk.Button(dialog, text="Create", command=on_create).grid(
+            row=2, column=0, columnspan=3, pady=(12, 8)
+        )
+
+        self.new_scene_dialog = dialog
+
+        return dialog
+
+    # Cria a cena de verdade -- separado do diálogo, testável direto.
+    # Repassa pro Core; ao terminar, seleciona a cena recém-criada no
+    # Explorer, já abrindo o Scene Editor nela.
+    def create_scene(self, name, background=""):
+
+        try:
+            key = self.core.create_scene(name, background)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return False
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_explorer()
+
+        item_id = f"scene:{key}"
+        self.explorer.selection_set(item_id)
+        self._show_properties(item_id)
+
+        return True
+
     # --- Projeto ------------------------------------------------------
     #
     # Só chama tkinter.filedialog aqui; carregar de fato fica em
@@ -402,6 +476,7 @@ class StudioApp:
         self.menus["File"].entryconfig("Save As...", state=state)
         self.menus["Build"].entryconfig("Play", state=state)
         self.menus["Edit"].entryconfig("New Character...", state=state)
+        self.menus["Edit"].entryconfig("New Scene...", state=state)
         self.toolbar_buttons["Save"].config(state=state)
         self.toolbar_buttons["Play"].config(state=state)
 

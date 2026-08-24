@@ -164,6 +164,21 @@ try:
     except StudioError:
         pass
 
+    # --- create_scene: background é opcional (SceneData aceita None) ---
+    chave_cena = core.create_scene("Quarto", background="assets/backgrounds/quarto.png")
+    assert chave_cena == "quarto"
+    assert core.project.scenes[chave_cena].background == "assets/backgrounds/quarto.png"
+    assert core.project.scenes[chave_cena].characters == []
+
+    chave_cena_sem_fundo = core.create_scene("Vazia")
+    assert core.project.scenes[chave_cena_sem_fundo].background is None
+
+    try:
+        core.create_scene("")
+        assert False, "esperava StudioError (nome vazio)"
+    except StudioError:
+        pass
+
     # --- apply_scene_field: mexe em SceneCharacter de verdade,
     # incluindo a validação que agora mora lá (position/scale) ---
     praca = SceneData(name="praca", background="assets/backgrounds/praca.png")

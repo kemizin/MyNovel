@@ -71,9 +71,13 @@ assert estados["New Project..."] == "normal"
 assert estados["Open Project..."] == "normal"
 assert estados["Exit"] == "normal"
 
-# --- Edit tem "New Character..." (Hardening), desabilitado ate abrir
-# um projeto -- Scene continua sem itens (nada fake) ---
-assert menu_entries(app.menus["Edit"]) == [("New Character...", "disabled")]
+# --- Edit tem "New Character.../New Scene..." (Hardening),
+# desabilitados ate abrir um projeto -- Scene continua sem itens
+# (nada fake) ---
+assert menu_entries(app.menus["Edit"]) == [
+    ("New Character...", "disabled"),
+    ("New Scene...", "disabled"),
+]
 assert menu_entries(app.menus["Scene"]) == []
 
 # --- Build tem "Play" (Waystone 10), desabilitado ate abrir um projeto ---
