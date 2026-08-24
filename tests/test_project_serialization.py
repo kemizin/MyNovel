@@ -48,12 +48,13 @@ try:
     assert raw["resolution"] == [1280, 720]
 
     # --- round trip com scenes/stories/assets preenchidos ---
-    # (scenes/stories ainda sao dicts crus -- SceneData/StoryData
-    # chegam em waystones futuros; assets ja usa a classe Asset)
+    # (stories ainda e dict cru -- StoryData chega num waystone
+    # futuro; scenes/assets ja usam SceneData/Asset)
     from src.MyNovellib.project.assets import Asset
+    from src.MyNovellib.project.scene_data import SceneData
 
     populated = Project(name="Com Dados")
-    populated.scenes["campo"] = {"name": "campo", "background": "campo.jpg"}
+    populated.scenes["campo"] = SceneData(name="campo", background="campo.jpg")
     populated.stories["intro"] = {"name": "intro", "actions": []}
     populated.add_asset(Asset(id="jef.idle", type="character_sprite", path="jef.png"))
 
@@ -64,20 +65,23 @@ try:
     assert loaded_populated.stories == populated.stories
     assert loaded_populated.assets == populated.assets
 
-    # --- round trip preservando objetos com to_dict() (sem precisar
-    # existir SceneData/CharacterData de verdade ainda) ---
-    class FakeSceneData:
+    # --- round trip preservando objetos com to_dict() em stories
+    # (ainda nao tem StoryData de verdade -- prova que o fallback
+    # generico de _to_serializable funciona antes da classe existir,
+    # do mesmo jeito que ja funcionou pra scenes/assets/characters
+    # antes de SceneData/Asset/CharacterData existirem) ---
+    class FakeStoryData:
         def __init__(self, name):
             self.name = name
         def to_dict(self):
             return {"name": self.name, "fake": True}
 
     with_object = Project(name="Com Objeto")
-    with_object.scenes["quarto"] = FakeSceneData("quarto")
+    with_object.stories["intro2"] = FakeStoryData("intro2")
     with_object.save(path("objeto.mynovel"))
 
     loaded_object = Project.load(path("objeto.mynovel"))
-    assert loaded_object.scenes["quarto"] == {"name": "quarto", "fake": True}
+    assert loaded_object.stories["intro2"] == {"name": "intro2", "fake": True}
 
     # --- carregar arquivo inexistente ---
     try:

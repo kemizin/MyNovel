@@ -7,6 +7,7 @@ import os
 
 from src.MyNovellib.project.assets import Asset
 from src.MyNovellib.project.character_data import CharacterData
+from src.MyNovellib.project.scene_data import SceneData
 
 # Formato/versão do arquivo de projeto. `version` viaja com o projeto
 # desde já pra permitir migração no futuro -- nenhuma migração é
@@ -50,9 +51,9 @@ class Project:
         self.resolution = (int(resolution[0]), int(resolution[1]))
         self.version = version
 
-        # Guardados por nome/id -> dado, pra busca O(1). As classes de
-        # dado (SceneData, StoryData, ...) chegam nos próximos
-        # Waystones -- por enquanto scenes/stories ficam vazios.
+        # Guardados por nome/id -> dado, pra busca O(1). StoryData
+        # chega num próximo Waystone -- por enquanto stories fica com
+        # dicts crus.
         self.scenes = {}
         self.stories = {}
         self.assets = {}
@@ -149,11 +150,15 @@ class Project:
             version=data["version"]
         )
 
-        project.scenes = dict(data.get("scenes", {}))
         project.stories = dict(data.get("stories", {}))
 
-        # assets/characters já têm classes de dado de verdade --
-        # reconstrói objetos, não deixa como dict cru.
+        # scenes/assets/characters já têm classes de dado de verdade
+        # -- reconstrói objetos, não deixa como dict cru.
+        project.scenes = {
+            key: SceneData.from_dict(value)
+            for key, value in data.get("scenes", {}).items()
+        }
+
         project.assets = {
             key: Asset.from_dict(value)
             for key, value in data.get("assets", {}).items()
