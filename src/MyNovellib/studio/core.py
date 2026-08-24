@@ -96,3 +96,57 @@ class StudioCore:
         self.project.loaded_from = os.path.dirname(self.project_path)
 
         self.dirty = False
+
+    # --- Character -------------------------------------------------------
+
+    # Reaproveita CharacterData.add_emotion() (Project System) e toda
+    # a validação de lá (idle e name não vazios) -- o Core não valida
+    # nada por conta própria, só traduz o ValueError em StudioError.
+    def add_emotion(self, character_key, name, idle, talking=""):
+
+        data = self.project.characters[character_key]
+
+        name = (name or "").strip()
+        idle = (idle or "").strip()
+        talking = (talking or "").strip() or None
+
+        try:
+            data.add_emotion(name, idle=idle, talking=talking)
+
+        except ValueError as error:
+            raise StudioError(str(error))
+
+        self.dirty = True
+
+    def remove_emotion(self, character_key, emotion_name):
+
+        data = self.project.characters[character_key]
+
+        del data.emotions[emotion_name]
+        self.dirty = True
+
+    # --- Scene -------------------------------------------------------
+
+    # `parse` só faz a conversão de tipo (str -> int/float, tipicamente
+    # vindo de um Entry) -- quem valida o VALOR (position precisa ser
+    # 1/2/3, scale precisa ser > 0) é o próprio SceneCharacter
+    # (property setter, ver project/scene_data.py). `index` fora do
+    # range de personagens da cena é no-op silencioso -- mesmo
+    # comportamento de sempre, não é erro de usuário.
+    def apply_scene_field(self, scene_key, index, field, raw_value, parse):
+
+        data = self.project.scenes[scene_key]
+
+        if index >= len(data.characters):
+            return
+
+        placement = data.characters[index]
+
+        try:
+            valor = parse(raw_value)
+            setattr(placement, field, valor)
+
+        except (TypeError, ValueError) as error:
+            raise StudioError(f"Valor inválido em {field}: {error}")
+
+        self.dirty = True

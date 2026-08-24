@@ -769,11 +769,9 @@ class StudioApp:
 
     def _remove_emotion(self, character_key, emotion_name):
 
-        data = self.project.characters[character_key]
+        self.core.remove_emotion(character_key, emotion_name)
 
-        del data.emotions[emotion_name]
-        self.mark_dirty()
-
+        self._update_title()  # o Core já marcou dirty
         self._show_properties(f"character:{character_key}")
 
     def _open_add_emotion_dialog(self, character_key):
@@ -830,26 +828,19 @@ class StudioApp:
         return dialog
 
     # Adiciona a emoção de verdade -- separado do diálogo, testável
-    # direto. Reaproveita CharacterData.add_emotion() (Project System
-    # Update, Waystone 5) inclusive toda a validação de lá (idle e
-    # name não vazios) -- o Studio não valida nada por conta própria,
-    # só mostra o ValueError que vier de lá.
+    # direto. Repassa pro Core (que reaproveita CharacterData.
+    # add_emotion() e a validação de lá) -- o Studio não valida nada
+    # por conta própria, só mostra o StudioError que vier de lá.
     def add_emotion(self, character_key, name, idle, talking=""):
 
-        data = self.project.characters[character_key]
-
-        name = (name or "").strip()
-        idle = (idle or "").strip()
-        talking = (talking or "").strip() or None
-
         try:
-            data.add_emotion(name, idle=idle, talking=talking)
+            self.core.add_emotion(character_key, name, idle, talking)
 
-        except ValueError as error:
+        except StudioError as error:
             messagebox.showerror(APP_TITLE, str(error))
             return False
 
-        self.mark_dirty()
+        self._update_title()  # o Core já marcou dirty
         self._show_properties(f"character:{character_key}")
 
         return True
@@ -1183,28 +1174,19 @@ class StudioApp:
     # `parse` só faz a conversão de tipo (str -> int/float) -- quem valida
     # o VALOR (position precisa ser 1/2/3, scale precisa ser > 0) é o
     # próprio SceneCharacter (property setter, ver project/scene_data.py),
-    # não o Studio. `setattr` já passa pela validação de lá, então um
-    # valor ruim levanta ValueError aqui do mesmo jeito que um tipo
-    # inválido -- um único except cobre os dois casos.
+    # não o Studio nem o Core. Repassa pro Core; um valor ruim ou um
+    # tipo inválido chegam aqui do mesmo jeito, como StudioError.
     def _apply_scene_field(self, index, field, raw_value, parse):
 
-        data = self.project.scenes[self.scene_editor_key]
-
-        if index >= len(data.characters):
-            return
-
-        placement = data.characters[index]
-
         try:
-            valor = parse(raw_value)
-            setattr(placement, field, valor)
+            self.core.apply_scene_field(self.scene_editor_key, index, field, raw_value, parse)
 
-        except (TypeError, ValueError) as error:
-            messagebox.showerror(APP_TITLE, f"Valor inválido em {field}: {error}")
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
             self._render_scene_properties()  # volta pro valor antigo
             return
 
-        self.mark_dirty()
+        self._update_title()  # o Core já marcou dirty
 
         self._render_scene_canvas()
         self._render_scene_properties()
