@@ -49,6 +49,7 @@ E a pasta [`exemples/`](exemples/) tem um arquivo focado em cada função indivi
 | `Engine` | Executa a história: abre a janela, desenha cada frame, processa input. |
 | `story` | Uma lista de **Actions** (falas e acontecimentos), executadas em ordem. |
 | `GameState` | Estado narrativo em memória (valores e flags) que a história lê/altera. |
+| `Project` | Um projeto MyNovel como **dados** (`project.mynovel`) — ver [Sistema de Projetos](#sistema-de-projetos-project-data). |
 
 ### Character
 
@@ -409,6 +410,148 @@ engine = Engine(state=GameState())
 engine.run(campo, story)
 ```
 
+## Sistema de Projetos (Project Data)
+
+Tudo que foi descrito até aqui é escrito em Python. A MyNovel também tem um formato de
+**projeto** — um jeito de descrever uma Visual Novel inteira como **dados** (arquivos
+`.mynovel` em JSON), sem escrever nenhuma linha de Python. É a base para uma futura
+interface visual (Studio) onde quem não programa também consiga criar uma VN.
+
+### Project Data × Runtime
+
+```
+                    MYNOVEL CORE
+                         │
+          ┌──────────────┴──────────────┐
+          │                              │
+     PROJECT DATA                     RUNTIME
+   (sem pygame, sem                 (Character, Canvas,
+    janela, só dados)                Engine, Actions)
+          │                              │
+          └────────── LOAD ──────────────┘
+```
+
+- **Project Data** (`src/MyNovellib/project/`) — `Project`, `CharacterData`, `SceneData`,
+  `StoryData`, `Asset`. Só dados: nenhum desses arquivos importa Pygame, abre janela ou
+  executa história. É o que um editor visual (Studio) leria e escreveria.
+- **Runtime** (`src/MyNovellib/*.py`, descrito no resto deste README) — `Character`,
+  `Canvas`, `Engine`, as Actions. É quem de fato roda o jogo.
+- **Carregar** (`project.create_runtime()`) é a ponte entre os dois: transforma dados em
+  objetos de Runtime e devolve pronto pra rodar pela `Engine` — a mesma `Engine`, não uma
+  paralela.
+
+### `project.mynovel`
+
+Um projeto é uma pasta com um arquivo `project.mynovel` (JSON) na raiz:
+
+```
+MeuJogo/
+├── project.mynovel
+├── assets/
+│   ├── characters/
+│   │   └── jef/
+│   │       ├── normal_idle.png
+│   │       └── normal_talking.png
+│   └── backgrounds/
+│       └── campo.png
+├── scenes/     # reservado pra uso futuro -- ver nota abaixo
+└── stories/    # reservado pra uso futuro -- ver nota abaixo
+```
+
+Hoje, os dados de cena e história ficam **dentro** do próprio `project.mynovel` (JSON
+aninhado), não em arquivos `.myscene`/`.mystory` separados por cena — as pastas
+`scenes/`/`stories/` existem na estrutura (`create_project()` já as cria), mas
+serializar cada cena/história em arquivo próprio é uma extensão futura, ainda não feita.
+
+```json
+{
+  "format": "mynovel",
+  "version": 1,
+  "name": "Meu Jogo",
+  "resolution": [1920, 1080],
+  "characters": {
+    "jef": {
+      "name": "Jef",
+      "emotions": {
+        "normal": {
+          "idle": "assets/characters/jef/normal_idle.png",
+          "talking": "assets/characters/jef/normal_talking.png"
+        }
+      }
+    }
+  },
+  "scenes": {
+    "campo": {
+      "name": "campo",
+      "background": "assets/backgrounds/campo.png",
+      "music": null,
+      "characters": [
+        {"character": "jef", "position": 1, "scale": 0.5, "emotion": "normal"}
+      ]
+    }
+  },
+  "stories": {
+    "intro": {
+      "name": "intro",
+      "actions": [
+        {"type": "speak", "character": "jef", "text": "Olá!"}
+      ]
+    }
+  },
+  "assets": {}
+}
+```
+
+### Criando e carregando um projeto
+
+```python
+from src.MyNovellib.project.directory import create_project
+
+directory = create_project("MeuJogo", resolution=(1920, 1080))
+project = directory.project   # um Project em memória, já salvo em MeuJogo/project.mynovel
+```
+
+```python
+from src.MyNovellib.project.character_data import CharacterData
+from src.MyNovellib.project.scene_data import SceneData
+from src.MyNovellib.project.story_data import StoryData
+
+jef = CharacterData("Jef")
+jef.add_emotion("normal", idle="assets/characters/jef/normal_idle.png")
+project.characters["jef"] = jef
+
+campo = SceneData(name="campo", background="assets/backgrounds/campo.png")
+campo.add_character("jef", position=1, scale=0.5, emotion="normal")
+project.scenes["campo"] = campo
+
+intro = StoryData(name="intro")
+intro.add_action("speak", character="jef", text="Olá!")
+intro.add_action("pause", duration=1)
+project.stories["intro"] = intro
+
+directory.save()  # regrava MeuJogo/project.mynovel com os dados novos
+```
+
+Pra rodar depois (o mesmo projeto, ou um projeto de outra pessoa):
+
+```python
+from src.MyNovellib.project.model import Project
+
+project = Project.load("MeuJogo/project.mynovel")
+runtime = project.create_runtime()
+runtime.run()  # funciona sozinho se houver 1 cena e 1 história; senão:
+# runtime.run(scene="campo", story="intro")
+```
+
+`Actions` suportadas como dado hoje (subconjunto pequeno, de propósito):
+`speak`, `emotion`, `move`, `enter`, `exit`, `pause`. Escolha (`choice`), condições
+(`if_state`) e o resto da API de Runtime ainda só existem escritas em Python — dá pra
+misturar os dois mundos livremente (nada impede um projeto carregado de ser combinado
+com Actions escritas à mão antes de chamar `engine.run()`).
+
+Um projeto real e completo, carregável do jeito que está no disco, está em
+[`exemples/project_demo/`](exemples/project_demo/).
+
 ## Exemplos
 
 A pasta [`exemples/`](exemples/) tem um arquivo por função, todos executáveis
@@ -432,23 +575,35 @@ diretamente:
 .venv/Scripts/python.exe exemples/01_speak.py
 ```
 
+[`exemples/project_demo/`](exemples/project_demo/) é diferente dos demais: não é um
+script `.py`, é um **projeto MyNovel de verdade** (`project.mynovel` + assets) — veja
+[Sistema de Projetos](#sistema-de-projetos-project-data) pra carregá-lo e rodá-lo.
+
 ## Estrutura do projeto
 
 ```
 myNovel/
 ├── assets/                  # imagens, músicas e dublagens
 ├── src/MyNovellib/
-│   ├── character.py         # Character
-│   ├── scene.py              # Canvas
-│   ├── dialogue.py           # Dialogue / speak()
-│   ├── story.py               # Action e as demais Actions (emotion, move, enter, exit, pause,
-│   │                          # change_scene, choice, if_state, set_state, ...)
-│   ├── state.py                # GameState
-│   ├── choice_ui.py             # ChoiceUI (desenho/hover/clique da Choice)
-│   ├── input.py                  # Input.poll() (QUIT + gesto de avançar, organizados)
-│   ├── transitions.py             # FadeTransition
-│   └── engine.py                   # Engine
-├── exemples/                  # um exemplo funcional por função
+│   ├── character.py         # Character (Runtime)
+│   ├── scene.py              # Canvas (Runtime)
+│   ├── dialogue.py           # Dialogue / speak() (Runtime)
+│   ├── story.py               # Action e as demais Actions (Runtime)
+│   ├── state.py                # GameState (Runtime)
+│   ├── choice_ui.py             # ChoiceUI (Runtime)
+│   ├── input.py                  # Input.poll() (Runtime)
+│   ├── transitions.py             # FadeTransition (Runtime)
+│   ├── engine.py                   # Engine (Runtime)
+│   └── project/                     # Project Data -- sem pygame, só dados
+│       ├── model.py                  # Project (+ save/load, create_runtime())
+│       ├── directory.py               # ProjectDirectory, create_project()
+│       ├── assets.py                   # Asset (registro de metadados)
+│       ├── character_data.py            # CharacterData
+│       ├── scene_data.py                 # SceneData, SceneCharacter
+│       ├── story_data.py                  # ActionData, StoryData
+│       ├── action_factory.py               # ActionData -> Actions de Runtime
+│       └── runtime_loader.py                # ProjectRuntime (Project -> Engine)
+├── exemples/                  # um exemplo funcional por função + exemples/project_demo/
 ├── tests/                      # testes de regressão (sem dependências externas)
 └── main.py                     # ponto de entrada / demo original
 ```
