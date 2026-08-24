@@ -16,10 +16,24 @@ import shutil
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.MyNovellib.studio.core import StudioCore, StudioError
+from src.MyNovellib.studio.core import StudioCore, StudioError, _slugify, _generate_key
 from src.MyNovellib.project.model import Project
 from src.MyNovellib.project.character_data import CharacterData
 from src.MyNovellib.project.scene_data import SceneData
+
+# --- _slugify/_generate_key: a chave interna de um personagem/cena/
+# história novo, derivada do nome (minúsculas, sem acento, sem
+# espaço) -- sem isso, nada dá pra criar só clicando. ---
+assert _slugify("Mika") == "mika"
+assert _slugify("João da Silva") == "joao_da_silva"
+assert _slugify("  Espaços   Extras  ") == "espacos_extras"
+assert _slugify("!!!") == ""  # só pontuação -- quem chama usa o fallback
+assert _slugify("") == ""
+
+assert _generate_key("Mika", existing_keys=set(), fallback="personagem") == "mika"
+assert _generate_key("Mika", existing_keys={"mika"}, fallback="personagem") == "mika_2"
+assert _generate_key("Mika", existing_keys={"mika", "mika_2"}, fallback="personagem") == "mika_3"
+assert _generate_key("!!!", existing_keys=set(), fallback="personagem") == "personagem"
 
 # --- importar StudioCore não traz tkinter (nem pygame) de brinde ---
 assert "tkinter" not in sys.modules
@@ -127,6 +141,28 @@ try:
 
     core.remove_emotion("mika", "feliz")
     assert "feliz" not in mika.emotions
+
+    # --- create_character: nasce sem emoção nenhuma (mesmo estado que
+    # CharacterData(nome) já tem) -- quem quiser a primeira emoção usa
+    # add_emotion() logo em seguida ---
+    core.dirty = False
+    chave = core.create_character("Novo Personagem")
+
+    assert chave == "novo_personagem"
+    assert core.project.characters[chave].name == "Novo Personagem"
+    assert core.project.characters[chave].emotions == {}
+    assert core.dirty is True
+
+    # nome repetido gera uma chave diferente, não sobrescreve
+    outra_chave = core.create_character("Novo Personagem")
+    assert outra_chave == "novo_personagem_2"
+    assert len(core.project.characters) == 3  # mika + os dois novos
+
+    try:
+        core.create_character("")
+        assert False, "esperava StudioError (nome vazio)"
+    except StudioError:
+        pass
 
     # --- apply_scene_field: mexe em SceneCharacter de verdade,
     # incluindo a validação que agora mora lá (position/scale) ---

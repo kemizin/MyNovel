@@ -15,15 +15,46 @@
 # atualizar a tela se não vier.
 
 import os
+import re
+import unicodedata
 
 from src.MyNovellib.project.model import Project
 from src.MyNovellib.project.directory import create_project
+from src.MyNovellib.project.character_data import CharacterData
 
 
 # Erro de uma operação do Core -- a mensagem já vem pronta pra
 # mostrar ao usuário (messagebox, toast, o que a interface usar).
 class StudioError(Exception):
     pass
+
+
+# Personagem/cena/história nova precisa de uma chave interna (a
+# criada à mão em código sempre foi algo tipo "mika") -- gerada a
+# partir do nome: minúsculas, sem acento, só [a-z0-9_]. Se colidir com
+# uma chave já existente, tenta "_2", "_3", ... até achar uma livre.
+def _slugify(text):
+
+    text = unicodedata.normalize("NFKD", text or "")
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "_", text)
+
+    return text.strip("_")
+
+
+def _generate_key(name, existing_keys, fallback):
+
+    base = _slugify(name) or fallback
+
+    if base not in existing_keys:
+        return base
+
+    n = 2
+    while f"{base}_{n}" in existing_keys:
+        n += 1
+
+    return f"{base}_{n}"
 
 
 class StudioCore:
@@ -98,6 +129,27 @@ class StudioCore:
         self.dirty = False
 
     # --- Character -------------------------------------------------------
+
+    # Cria um CharacterData vazio (sem emoção nenhuma ainda -- mesmo
+    # estado que CharacterData(nome) já tem em Python; a primeira
+    # emoção entra depois via add_emotion(), acima). Devolve a chave
+    # gerada, pra quem chamou já poder selecionar/abrir o personagem
+    # recém-criado.
+    def create_character(self, name):
+
+        name = (name or "").strip()
+
+        try:
+            character = CharacterData(name)
+
+        except ValueError as error:
+            raise StudioError(str(error))
+
+        key = _generate_key(name, self.project.characters, fallback="personagem")
+        self.project.characters[key] = character
+        self.dirty = True
+
+        return key
 
     # Reaproveita CharacterData.add_emotion() (Project System) e toda
     # a validação de lá (idle e name não vazios) -- o Core não valida

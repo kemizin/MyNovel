@@ -62,6 +62,9 @@ class StudioApp:
             file_menu.entryconfig(label, state=tk.DISABLED)
 
         edit_menu = tk.Menu(menubar, tearoff=False)
+        edit_menu.add_command(
+            label="New Character...", command=self.new_character, state=tk.DISABLED
+        )
         menubar.add_cascade(label="Edit", menu=edit_menu)
 
         scene_menu = tk.Menu(menubar, tearoff=False)
@@ -285,6 +288,70 @@ class StudioApp:
 
         return True
 
+    # --- Novo personagem --------------------------------------------------
+    #
+    # Mesmo princípio de New Project: new_character() só abre o
+    # diálogo; create_character(...) faz o trabalho de verdade e é
+    # testável direto. Só pede o nome -- o personagem nasce sem
+    # nenhuma emoção ainda (mesmo estado que CharacterData(nome) já
+    # tem em Python) e usa o "+ Add Emotion" que já existe no
+    # Character Editor pra ganhar a primeira emoção, em vez de repetir
+    # esses campos aqui também.
+
+    def new_character(self):
+        self._open_new_character_dialog()
+
+    def _open_new_character_dialog(self):
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("New Character")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        name_var = tk.StringVar()
+
+        pad = {"padx": 8, "pady": 4}
+
+        tk.Label(dialog, text="Name:").grid(row=0, column=0, sticky="w", **pad)
+        entry = tk.Entry(dialog, textvariable=name_var, width=28)
+        entry.grid(row=0, column=1, sticky="we", **pad)
+        entry.focus_set()
+
+        def on_create():
+            criado = self.create_character(name_var.get())
+            if criado:
+                dialog.destroy()
+
+        tk.Button(dialog, text="Create", command=on_create).grid(
+            row=1, column=0, columnspan=2, pady=(12, 8)
+        )
+
+        self.new_character_dialog = dialog
+
+        return dialog
+
+    # Cria o personagem de verdade -- separado do diálogo, testável
+    # direto. Repassa pro Core; ao terminar, seleciona o personagem
+    # recém-criado no Explorer, já abrindo o Character Editor nele
+    # (pronto pra "+ Add Emotion").
+    def create_character(self, name):
+
+        try:
+            key = self.core.create_character(name)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return False
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_explorer()
+
+        item_id = f"character:{key}"
+        self.explorer.selection_set(item_id)
+        self._show_properties(item_id)
+
+        return True
+
     # --- Projeto ------------------------------------------------------
     #
     # Só chama tkinter.filedialog aqui; carregar de fato fica em
@@ -325,7 +392,8 @@ class StudioApp:
         self._refresh_explorer()
         self._refresh_asset_browser()
 
-    # Save/Save As/Play só fazem sentido com um projeto aberto.
+    # Save/Save As/Play/New Character só fazem sentido com um projeto
+    # aberto.
     def _set_project_actions_enabled(self, enabled):
 
         state = tk.NORMAL if enabled else tk.DISABLED
@@ -333,6 +401,7 @@ class StudioApp:
         self.menus["File"].entryconfig("Save", state=state)
         self.menus["File"].entryconfig("Save As...", state=state)
         self.menus["Build"].entryconfig("Play", state=state)
+        self.menus["Edit"].entryconfig("New Character...", state=state)
         self.toolbar_buttons["Save"].config(state=state)
         self.toolbar_buttons["Play"].config(state=state)
 
