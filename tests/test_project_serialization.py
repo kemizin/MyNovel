@@ -48,14 +48,14 @@ try:
     assert raw["resolution"] == [1280, 720]
 
     # --- round trip com scenes/stories/assets preenchidos ---
-    # (stories ainda e dict cru -- StoryData chega num waystone
-    # futuro; scenes/assets ja usam SceneData/Asset)
+    # (todos os 4 containers ja tem classe de dado propria)
     from src.MyNovellib.project.assets import Asset
     from src.MyNovellib.project.scene_data import SceneData
+    from src.MyNovellib.project.story_data import StoryData
 
     populated = Project(name="Com Dados")
     populated.scenes["campo"] = SceneData(name="campo", background="campo.jpg")
-    populated.stories["intro"] = {"name": "intro", "actions": []}
+    populated.stories["intro"] = StoryData(name="intro")
     populated.add_asset(Asset(id="jef.idle", type="character_sprite", path="jef.png"))
 
     populated.save(path("populado.mynovel"))
@@ -65,23 +65,20 @@ try:
     assert loaded_populated.stories == populated.stories
     assert loaded_populated.assets == populated.assets
 
-    # --- round trip preservando objetos com to_dict() em stories
-    # (ainda nao tem StoryData de verdade -- prova que o fallback
-    # generico de _to_serializable funciona antes da classe existir,
-    # do mesmo jeito que ja funcionou pra scenes/assets/characters
-    # antes de SceneData/Asset/CharacterData existirem) ---
-    class FakeStoryData:
-        def __init__(self, name):
-            self.name = name
+    # --- _to_serializable(): fallback generico usado por to_dict()
+    # pra qualquer valor com .to_dict() -- e o mecanismo que ja
+    # permitiu SceneData/Asset/CharacterData/StoryData funcionarem
+    # antes mesmo de cada classe existir, nos waystones anteriores.
+    # Testado direto na funcao, sem depender de sobrar algum
+    # container "cru" no Project. ---
+    from src.MyNovellib.project.model import _to_serializable
+
+    class ComToDict:
         def to_dict(self):
-            return {"name": self.name, "fake": True}
+            return {"ok": True}
 
-    with_object = Project(name="Com Objeto")
-    with_object.stories["intro2"] = FakeStoryData("intro2")
-    with_object.save(path("objeto.mynovel"))
-
-    loaded_object = Project.load(path("objeto.mynovel"))
-    assert loaded_object.stories["intro2"] == {"name": "intro2", "fake": True}
+    assert _to_serializable(ComToDict()) == {"ok": True}
+    assert _to_serializable({"plain": "dict"}) == {"plain": "dict"}
 
     # --- carregar arquivo inexistente ---
     try:
