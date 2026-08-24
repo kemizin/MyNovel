@@ -48,10 +48,14 @@ try:
     assert raw["resolution"] == [1280, 720]
 
     # --- round trip com scenes/stories/assets preenchidos ---
+    # (scenes/stories ainda sao dicts crus -- SceneData/StoryData
+    # chegam em waystones futuros; assets ja usa a classe Asset)
+    from src.MyNovellib.project.assets import Asset
+
     populated = Project(name="Com Dados")
     populated.scenes["campo"] = {"name": "campo", "background": "campo.jpg"}
     populated.stories["intro"] = {"name": "intro", "actions": []}
-    populated.assets["jef.idle"] = {"id": "jef.idle", "path": "jef.png"}
+    populated.add_asset(Asset(id="jef.idle", type="character_sprite", path="jef.png"))
 
     populated.save(path("populado.mynovel"))
     loaded_populated = Project.load(path("populado.mynovel"))

@@ -5,6 +5,8 @@
 import json
 import os
 
+from src.MyNovellib.project.assets import Asset
+
 # Formato/versão do arquivo de projeto. `version` viaja com o projeto
 # desde já pra permitir migração no futuro -- nenhuma migração é
 # feita ainda (ver Waystone de serialização), só o campo existe e é
@@ -61,6 +63,34 @@ class Project:
             f"version={self.version!r})"
         )
 
+    # --- Assets ---------------------------------------------------------
+    #
+    # Só REGISTRO (metadados: id/type/path) -- o Project nunca carrega o
+    # arquivo de asset de verdade (isso é trabalho do Runtime).
+
+    def add_asset(self, asset):
+
+        self.assets[asset.id] = asset
+        return asset
+
+    def remove_asset(self, asset_id):
+
+        if asset_id not in self.assets:
+            raise KeyError(
+                f"Asset {asset_id!r} não está registrado neste projeto."
+            )
+
+        del self.assets[asset_id]
+
+    def get_asset(self, asset_id):
+
+        if asset_id not in self.assets:
+            raise KeyError(
+                f"Asset {asset_id!r} não está registrado neste projeto."
+            )
+
+        return self.assets[asset_id]
+
     # --- Serialização -------------------------------------------------
 
     def to_dict(self):
@@ -115,7 +145,13 @@ class Project:
 
         project.scenes = dict(data.get("scenes", {}))
         project.stories = dict(data.get("stories", {}))
-        project.assets = dict(data.get("assets", {}))
+
+        # assets já tem uma classe de dado de verdade (Asset) --
+        # reconstrói objetos, não deixa como dict cru.
+        project.assets = {
+            key: Asset.from_dict(value)
+            for key, value in data.get("assets", {}).items()
+        }
 
         return project
 
