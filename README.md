@@ -414,8 +414,9 @@ engine.run(campo, story)
 
 Tudo que foi descrito até aqui é escrito em Python. A MyNovel também tem um formato de
 **projeto** — um jeito de descrever uma Visual Novel inteira como **dados** (arquivos
-`.mynovel` em JSON), sem escrever nenhuma linha de Python. É a base para uma futura
-interface visual (Studio) onde quem não programa também consiga criar uma VN.
+`.mynovel` em JSON), sem escrever nenhuma linha de Python. É a base do
+[**MyNovel Studio**](#mynovel-studio), o editor visual onde quem não programa também
+consegue criar uma VN.
 
 ### Project Data × Runtime
 
@@ -433,7 +434,7 @@ interface visual (Studio) onde quem não programa também consiga criar uma VN.
 
 - **Project Data** (`src/MyNovellib/project/`) — `Project`, `CharacterData`, `SceneData`,
   `StoryData`, `Asset`. Só dados: nenhum desses arquivos importa Pygame, abre janela ou
-  executa história. É o que um editor visual (Studio) leria e escreveria.
+  executa história. É o que o [MyNovel Studio](#mynovel-studio) lê e escreve.
 - **Runtime** (`src/MyNovellib/*.py`, descrito no resto deste README) — `Character`,
   `Canvas`, `Engine`, as Actions. É quem de fato roda o jogo.
 - **Carregar** (`project.create_runtime()`) é a ponte entre os dois: transforma dados em
@@ -552,6 +553,89 @@ com Actions escritas à mão antes de chamar `engine.run()`).
 Um projeto real e completo, carregável do jeito que está no disco, está em
 [`exemples/project_demo/`](exemples/project_demo/).
 
+## MyNovel Studio
+
+Além de editar `.mynovel` na mão ou por código (seção anterior), a MyNovel tem um
+editor visual de verdade: o **MyNovel Studio**, uma interface desktop (Tkinter) pra
+criar e editar projetos sem escrever Python.
+
+### Project Data × Studio × Runtime
+
+```
+                        MYNOVEL CORE
+                             │
+          ┌──────────────────┼──────────────────┐
+          │                  │                   │
+     PROJECT DATA         STUDIO              RUNTIME
+   (sem pygame, sem      (Tkinter --        (Character, Canvas,
+    janela, só dados)    edita Project       Engine, Actions)
+                          Data)
+
+     PROJECT DATA ── carrega / salva ── STUDIO
+     PROJECT DATA ── Play (create_runtime()) ── RUNTIME
+```
+
+- O **Studio nunca duplica a Engine** — ele só lê e escreve Project Data (`Project`,
+  `CharacterData`, `SceneData`, `Asset`), do mesmo jeito que qualquer código Python
+  faria com `project.characters["jef"] = ...`. A única exceção é o botão **Play**, que
+  chama `project.create_runtime()` e roda a MESMA `Engine` de sempre, numa janela
+  pygame separada e síncrona — o Studio fica pausado enquanto o jogo roda, e volta ao
+  normal quando o jogador fecha a janela ou a história termina.
+- O Project System (`src/MyNovellib/project/`) continua sem importar Tkinter ou
+  Pygame — o Studio é só mais um consumidor dessa camada de dados, como o Runtime já
+  era.
+
+### Abrindo o Studio
+
+```bash
+.venv/Scripts/python.exe studio.py
+```
+
+### Fluxo básico
+
+1. **File → New Project...** — pede nome, pasta e resolução, cria a estrutura de
+   pastas (`assets/`, `scenes/`, `stories/`, `project.mynovel`) e já abre o projeto
+   recém-criado. Ou **File → Open Project...** pra abrir um `project.mynovel`
+   existente.
+2. **Project Explorer** (aba "Project" da barra lateral) — Characters, Scenes,
+   Stories e Assets do projeto em árvore. Clicar num personagem ou cena abre o editor
+   correspondente no painel Properties; qualquer outra seleção mostra um resumo
+   somente-leitura.
+3. **Character Editor** — nome do personagem, e uma linha por emoção com os sprites
+   (idle/talking, com botão "Browse...") e um botão "Remove Emotion". "+ Add Emotion"
+   abre um diálogo pra cadastrar uma nova emoção.
+4. **Scene Editor** — preview da cena (fundo + personagens posicionados) num canvas;
+   arrastar um personagem no preview ajusta `offset_x`/`offset_y` em tempo real, e o
+   painel ao lado tem campos "Position", "Scale", "Offset X", "Offset Y" e a emoção
+   inicial de cada personagem da cena.
+5. **File → Save** (ou **Save As...** pra salvar em outro lugar) — grava o
+   `project.mynovel` com as edições. O título da janela mostra `*` quando há
+   alterações não salvas (ex.: `MyNovel Studio — MeuJogo *`), e some assim que salva;
+   fechar com alterações pendentes pergunta se quer salvar antes.
+6. **▶ Play** (toolbar ou Build → Play) — roda o projeto atual pela Engine de
+   verdade, numa janela separada; o Studio continua aberto e volta ao normal quando o
+   jogo termina.
+
+A outra aba da barra lateral, **Assets**, lista todos os assets do projeto agrupados
+por tipo (personagem, fundo, música, dublagem, outros), com miniatura sob demanda pra
+imagens.
+
+### Experimentando
+
+[`exemples/studio_demo/`](exemples/studio_demo/) é um projeto pequeno (1 personagem,
+1 cena, 2 falas — o foco é o fluxo, não o tamanho da história) já pronto pra abrir no
+Studio (**File → Open Project...** → `exemples/studio_demo/project.mynovel`) e seguir
+o fluxo inteiro na mão: navegar o Explorer, editar o personagem e a cena, salvar, e
+dar Play.
+
+### O que o Studio ainda não faz
+
+Criar ou remover personagens/cenas pela interface (hoje só edita os que já existem no
+projeto), editor de Diálogo/Escolha, Timeline, editor de Animação, editor de
+Voz/Áudio, Node Editor (fluxo de história visual), Build/Export, empacotamento pra
+Windows, versão web, colaboração/nuvem, plugins, temas, marketplace. Nada disso é bug
+— é escopo definido pra essa fase.
+
 ## Exemplos
 
 A pasta [`exemples/`](exemples/) tem um arquivo por função, todos executáveis
@@ -594,17 +678,20 @@ myNovel/
 │   ├── input.py                  # Input.poll() (Runtime)
 │   ├── transitions.py             # FadeTransition (Runtime)
 │   ├── engine.py                   # Engine (Runtime)
-│   └── project/                     # Project Data -- sem pygame, só dados
-│       ├── model.py                  # Project (+ save/load, create_runtime())
-│       ├── directory.py               # ProjectDirectory, create_project()
-│       ├── assets.py                   # Asset (registro de metadados)
-│       ├── character_data.py            # CharacterData
-│       ├── scene_data.py                 # SceneData, SceneCharacter
-│       ├── story_data.py                  # ActionData, StoryData
-│       ├── action_factory.py               # ActionData -> Actions de Runtime
-│       └── runtime_loader.py                # ProjectRuntime (Project -> Engine)
-├── exemples/                  # um exemplo funcional por função + exemples/project_demo/
+│   ├── project/                     # Project Data -- sem pygame, só dados
+│   │   ├── model.py                  # Project (+ save/load, create_runtime())
+│   │   ├── directory.py               # ProjectDirectory, create_project()
+│   │   ├── assets.py                   # Asset (registro de metadados)
+│   │   ├── character_data.py            # CharacterData
+│   │   ├── scene_data.py                 # SceneData, SceneCharacter
+│   │   ├── story_data.py                  # ActionData, StoryData
+│   │   ├── action_factory.py               # ActionData -> Actions de Runtime
+│   │   └── runtime_loader.py                # ProjectRuntime (Project -> Engine)
+│   └── studio/                       # MyNovel Studio -- Tkinter, edita Project Data
+│       └── app.py                          # StudioApp (janela, menus, editores, Play)
+├── exemples/                  # um exemplo funcional por função + project_demo/ + studio_demo/
 ├── tests/                      # testes de regressão (sem dependências externas)
+├── studio.py                   # ponto de entrada do MyNovel Studio
 └── main.py                     # ponto de entrada / demo original
 ```
 
@@ -629,7 +716,10 @@ myNovel/
   novel — e um `goto` genérico exigiria achatar a árvore de Actions aninhadas (Choice/
   if_state) numa sequência indexável, um redesenho grande pra um caso raro.
 
-Ainda **não implementado** (por escolha, não é bug): editor visual, timeline gráfica,
-save/load, rollback, histórico de escolhas, gerenciador de voz avançado, sistema de
-SFX, lip sync, animações complexas, partículas, scripting próprio, exportação para
-executável, versão web, sistema de plugins, multiplayer.
+Ainda **não implementado** (por escolha, não é bug): timeline gráfica, save/load (do
+estado de uma partida em andamento), rollback, histórico de escolhas, gerenciador de
+voz avançado, sistema de SFX, lip sync, animações complexas, partículas, scripting
+próprio, exportação para executável, versão web, sistema de plugins, multiplayer. O
+[MyNovel Studio](#mynovel-studio) já cobre o essencial de "editor visual"; o que ainda
+falta nele especificamente está listado em [O que o Studio ainda não
+faz](#o-que-o-studio-ainda-não-faz).
