@@ -67,6 +67,7 @@ class StudioApp:
         menubar.add_cascade(label="Scene", menu=scene_menu)
 
         build_menu = tk.Menu(menubar, tearoff=False)
+        build_menu.add_command(label="Play", command=self.play_project, state=tk.DISABLED)
         menubar.add_cascade(label="Build", menu=build_menu)
 
         help_menu = tk.Menu(menubar, tearoff=False)
@@ -95,8 +96,8 @@ class StudioApp:
 
         self.toolbar_buttons = {}
 
-        # espelha os comandos de File -- mesma regra do menu: Save só
-        # faz sentido com um projeto aberto.
+        # espelha os comandos de File/Build -- mesma regra dos menus:
+        # Save/Play só fazem sentido com um projeto aberto.
         commands = {
             "New": self.new_project,
             "Open": self.open_project,
@@ -112,6 +113,16 @@ class StudioApp:
             )
             button.pack(side=tk.LEFT, padx=2, pady=2)
             self.toolbar_buttons[label] = button
+
+        play_button = tk.Button(
+            self.toolbar,
+            text="▶ Play",
+            command=self.play_project,
+            state=tk.DISABLED,
+            fg="dark green",
+        )
+        play_button.pack(side=tk.LEFT, padx=(12, 2), pady=2)
+        self.toolbar_buttons["Play"] = play_button
 
     # --- Área principal: sidebar (Project / Assets) + Properties (direita) --
 
@@ -344,17 +355,20 @@ class StudioApp:
         self.root.title(f"{APP_TITLE} — {self.project.name}")
         self.set_status(f'Projeto "{self.project.name}" carregado.')
         self.dirty = False
-        self._set_save_enabled(True)
+        self._set_project_actions_enabled(True)
         self._refresh_explorer()
         self._refresh_asset_browser()
 
-    def _set_save_enabled(self, enabled):
+    # Save/Save As/Play só fazem sentido com um projeto aberto.
+    def _set_project_actions_enabled(self, enabled):
 
         state = tk.NORMAL if enabled else tk.DISABLED
 
         self.menus["File"].entryconfig("Save", state=state)
         self.menus["File"].entryconfig("Save As...", state=state)
+        self.menus["Build"].entryconfig("Play", state=state)
         self.toolbar_buttons["Save"].config(state=state)
+        self.toolbar_buttons["Play"].config(state=state)
 
     # Chamado por qualquer edição futura (Character/Scene/Story/
     # Project) pra marcar que existem alterações não salvas. Ainda
@@ -1200,6 +1214,58 @@ class StudioApp:
 
         self._render_scene_canvas()
         self._render_scene_properties()
+
+    # --- Play ---------------------------------------------------------
+    #
+    #     Studio -> Project -> create_runtime() -> Runtime -> Game
+    #
+    # Reaproveita a Engine existente (Project System Update, Waystone
+    # 9) -- NENHUMA Engine paralela. create_runtime() trabalha em cima
+    # do Project em memória (não precisa estar salvo em disco antes --
+    # Play sempre reflete o estado atual, mesmo com alterações não
+    # salvas).
+    #
+    # Integração: engine.run() é uma chamada bloqueante comum, feita
+    # aqui de dentro do callback do botão -- ela abre a JANELA DO JOGO
+    # (pygame) e só retorna quando a história termina ou a janela do
+    # jogo é fechada. Como isso acontece dentro do próprio callback da
+    # Tkinter mainloop, a janela do Studio fica sem processar eventos
+    # (visualmente parada) enquanto o jogo roda -- exatamente como
+    # aconteceria com qualquer diálogo modal -- e volta a responder
+    # normalmente assim que engine.run() retorna. É a integração mais
+    # direta que a arquitetura atual já permite, sem precisar rodar
+    # pygame numa thread separada (frágil -- SDL não é pensado pra
+    # isso) nem criar um processo/Engine paralelos.
+    def play_project(self):
+
+        if self.project is None:
+            return
+
+        try:
+            runtime = self.project.create_runtime()
+
+        except Exception as error:
+            messagebox.showerror(
+                APP_TITLE, f"Não foi possível preparar o projeto para rodar:\n\n{error}"
+            )
+            return
+
+        self.set_status(f'Rodando "{self.project.name}"...')
+
+        try:
+            runtime.run()
+
+        except ValueError as error:
+            # ProjectRuntime.run() levanta isso quando há mais de uma
+            # cena/história e nenhuma foi escolhida -- ainda não existe
+            # UI pra escolher, então mostramos o motivo em vez de
+            # adivinhar ou travar.
+            messagebox.showerror(APP_TITLE, f"Não foi possível rodar o projeto:\n\n{error}")
+
+        except Exception as error:
+            messagebox.showerror(APP_TITLE, f"Erro ao rodar o projeto:\n\n{error}")
+
+        self.set_status(f'"{self.project.name}" -- de volta ao Studio.')
 
     # --- Salvar -------------------------------------------------------
     #

@@ -71,18 +71,21 @@ assert estados["New Project..."] == "normal"
 assert estados["Open Project..."] == "normal"
 assert estados["Exit"] == "normal"
 
-# --- Edit/Scene/Build existem mas ainda sem itens (nada fake) ---
+# --- Edit/Scene existem mas ainda sem itens (nada fake) ---
 assert menu_entries(app.menus["Edit"]) == []
 assert menu_entries(app.menus["Scene"]) == []
-assert menu_entries(app.menus["Build"]) == []
+
+# --- Build tem "Play" (Waystone 10), desabilitado ate abrir um projeto ---
+assert menu_entries(app.menus["Build"]) == [("Play", "disabled")]
 
 # --- Help tem "About", habilitado ---
 help_entries = menu_entries(app.menus["Help"])
 assert help_entries == [("About MyNovel Studio", "normal")]
 
-# --- toolbar: Save ainda desabilitado, New/Open ja funcionam ---
-assert set(app.toolbar_buttons) == {"New", "Open", "Save"}
+# --- toolbar: Save/Play ainda desabilitados, New/Open ja funcionam ---
+assert set(app.toolbar_buttons) == {"New", "Open", "Save", "Play"}
 assert str(app.toolbar_buttons["Save"].cget("state")) == "disabled"
+assert str(app.toolbar_buttons["Play"].cget("state")) == "disabled"
 assert str(app.toolbar_buttons["New"].cget("state")) == "normal"
 assert str(app.toolbar_buttons["Open"].cget("state")) == "normal"
 
