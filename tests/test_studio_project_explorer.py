@@ -88,12 +88,19 @@ labels_da_cena = [
 assert "SCENE" in labels_da_cena
 assert isinstance(app.scene_canvas, tk.Canvas)
 
-# --- selecionar uma historia mostra a quantidade de acoes ---
+# --- selecionar uma historia abre o Story Editor (Hardening, lista
+# ordenada de Actions), nao mais um texto somente-leitura -- so
+# confirma que a lista aparece com as 6 actions da story do demo; o
+# comportamento dele em detalhe e testado em test_studio_story_editor.py ---
 app.explorer.selection_set("story:intro")
 app._on_explorer_select()
-texto = app.properties_label.cget("text")
-assert "intro" in texto
-assert "6" in texto  # a story do demo tem 6 actions (Waystone 11 da Project System Update)
+labels_da_historia = [
+    w.cget("text") for w in app.properties_content.winfo_children()
+    if isinstance(w, tk.Label)
+]
+assert "STORY" in labels_da_historia
+assert isinstance(app.story_listbox, tk.Listbox)
+assert app.story_listbox.size() == 6  # a story do demo tem 6 actions
 
 # --- selecionar um asset mostra id/tipo/caminho ---
 app.explorer.selection_set("asset:praca.bg")

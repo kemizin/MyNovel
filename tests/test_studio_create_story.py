@@ -3,8 +3,8 @@
 #
 # Hardening, Waystone "studio create story": Edit > New Story cria uma
 # StoryData de verdade (via StudioCore) -- vazia, sem Action nenhuma
-# (não existe Story Editor nesta fase pra preencher o conteúdo; isso
-# é o próximo bloco do plano de hardening).
+# (o Story Editor, waystone seguinte, ainda não tem como adicionar
+# Actions -- só lista, por enquanto).
 #
 # Usa tkinter DE VERDADE com root.withdraw() -- nunca aparece nada na
 # tela.
@@ -48,9 +48,9 @@ try:
 
     assert app.explorer.selection() == ("story:introducao",)
 
-    # ainda não existe Story Editor -- selecionar mostra o resumo de
-    # sempre, com "Ações: 0"
-    assert "Ações: 0" in app.properties_label.cget("text")
+    # Story Editor abre, vazio (sem Action nenhuma ainda)
+    assert isinstance(app.story_listbox, tk.Listbox)
+    assert app.story_listbox.size() == 0
 
     # --- nome vazio: StudioError vira messagebox, nada é criado ---
     total_antes = len(app.project.stories)

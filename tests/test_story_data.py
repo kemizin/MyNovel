@@ -64,6 +64,21 @@ except ValueError:
 data = {"type": "move", "character": "jef", "position": 2}
 assert ActionData.from_dict(data) == move
 
+# --- describe(): resumo de uma linha, pro Story Editor do Studio (e
+# qualquer outra interface) mostrar sem reimplementar a formatação ---
+assert speak.describe() == 'speak ken: "Olá!"'
+assert emotion.describe() == "emotion jef: bravo"
+assert move.describe() == "move jef: position=2"
+assert ActionData("move", character="jef").describe() == "move jef: (sem mudanças)"
+assert enter.describe() == "enter ken (position 3)"
+assert exit_.describe() == "exit ken"
+assert pause.describe() == "pause 1s"
+
+texto_longo = ActionData("speak", character="jef", text="x" * 100)
+resumo = texto_longo.describe()
+assert len(resumo) < 100  # truncado, não devolve o texto inteiro
+assert resumo.endswith("…\"")
+
 # --- StoryData: nome + lista ordenada de ActionData ---
 intro = StoryData(name="intro")
 intro.add_action("speak", character="ken", text="Tem alguém aí?")

@@ -707,27 +707,52 @@ class StudioApp:
             return
 
         if iid.startswith("story:"):
-            self._build_story_summary(iid.split(":", 1)[1])
+            self._build_story_editor(iid.split(":", 1)[1])
             return
 
         self._build_readonly_properties(self._describe_selection(iid), thumbnail_iid=iid)
 
-    # História ainda não tem editor de verdade (Story Editor -- fase
-    # seguinte do plano de hardening) -- por enquanto é o mesmo resumo
-    # somente-leitura de sempre, só que com um botão de apagar (senão
-    # uma história criada pelo Studio nunca teria como ser removida).
-    def _build_story_summary(self, story_key):
+    # --- Story Editor -----------------------------------------------------
+    #
+    # Primeiro passo: lista ordenada e somente-leitura das Actions da
+    # história (a ordem é a ordem de execução -- por isso Listbox, não
+    # Treeview: reordenar itens de uma lista plana mais tarde é
+    # simples de fazer com delete/insert). Cada linha usa
+    # ActionData.describe() (project/story_data.py) -- o Studio não
+    # reimplementa esse texto. Adicionar/editar/remover/reordenar
+    # Action ainda não existe (próximos waystones).
 
-        self._build_readonly_properties(
-            self._describe_selection(f"story:{story_key}"), thumbnail_iid=None
-        )
+    def _build_story_editor(self, story_key):
+
+        parent = self.properties_content
+        data = self.project.stories[story_key]
+
+        tk.Label(
+            parent, text="STORY", anchor="w", font=("", 9, "bold")
+        ).pack(fill=tk.X, padx=8, pady=(8, 0))
+
+        tk.Label(
+            parent,
+            text=f"{len(data.actions)} ação(ões) -- em ordem de execução:",
+            anchor="w",
+            fg="gray40",
+        ).pack(fill=tk.X, padx=8, pady=(4, 4))
+
+        listbox = tk.Listbox(parent, activestyle="none")
+        listbox.pack(fill=tk.BOTH, expand=True, padx=8)
+
+        for action in data.actions:
+            listbox.insert(tk.END, action.describe())
+
+        self.story_listbox = listbox
+        self.story_editor_key = story_key
 
         tk.Button(
-            self.properties_content,
+            parent,
             text="Delete Story",
             fg="red3",
             command=lambda: self._delete_story(story_key),
-        ).pack(anchor="w", padx=8, pady=(0, 8))
+        ).pack(anchor="w", padx=8, pady=(8, 8))
 
     def _delete_story(self, story_key):
 
@@ -852,10 +877,6 @@ class StudioApp:
                 f"Música: {data.music or '(nenhuma)'}\n"
                 f"Personagens na cena: {len(data.characters)}"
             )
-
-        if kind == "story":
-            data = project.stories[key]
-            return f"História: {data.name}\nAções: {len(data.actions)}"
 
         if kind == "asset":
             data = project.assets[key]

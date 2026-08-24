@@ -32,6 +32,46 @@ _REQUIRED_FIELDS = {
     "pause": ("duration",),
 }
 
+_DESCRIBE_TEXT_MAX = 40
+
+
+def _describe_speak(fields):
+
+    texto = fields.get("text", "")
+
+    if len(texto) > _DESCRIBE_TEXT_MAX:
+        texto = texto[: _DESCRIBE_TEXT_MAX - 1] + "…"
+
+    return f'speak {fields.get("character")}: "{texto}"'
+
+
+def _describe_move(fields):
+
+    partes = [
+        f"{chave}={fields[chave]}"
+        for chave in ("position", "scale", "offset_x", "offset_y")
+        if fields.get(chave) is not None
+    ]
+
+    return f'move {fields.get("character")}: ' + (", ".join(partes) if partes else "(sem mudanças)")
+
+
+# Um describer pequeno por tipo -- mesma ideia do _BUILDERS em
+# action_factory.py, só que pra texto em vez de Action de Runtime.
+_ACTION_DESCRIBERS = {
+    "speak": _describe_speak,
+    "emotion": lambda fields: f'emotion {fields.get("character")}: {fields.get("emotion")}',
+    "move": _describe_move,
+    "enter": lambda fields: f'enter {fields.get("character")} (position {fields.get("position")})',
+    "exit": lambda fields: f'exit {fields.get("character")}',
+    "pause": lambda fields: f'pause {fields.get("duration")}s',
+}
+
+assert set(_ACTION_DESCRIBERS) == set(SUPPORTED_ACTION_TYPES), (
+    "_ACTION_DESCRIBERS desalinhado de SUPPORTED_ACTION_TYPES -- todo "
+    "tipo suportado por ActionData precisa de um describer aqui."
+)
+
 
 # Uma única Action representada como dado: {"type": ..., <campos>}.
 #
@@ -64,6 +104,14 @@ class ActionData:
 
     def to_dict(self):
         return {"type": self.type, **self.fields}
+
+    # Resumo legível de uma linha só, tipo "speak jef: \"Olá!\"" -- pro
+    # Story Editor do Studio mostrar a lista de Actions sem repetir
+    # essa formatação lá (e pra qualquer outra interface que precise
+    # descrever uma Action sem reescrever isso). Não é o mesmo que
+    # __repr__ (que mostra o dado cru, pra debug).
+    def describe(self):
+        return _ACTION_DESCRIBERS[self.type](self.fields)
 
     @classmethod
     def from_dict(cls, data):
