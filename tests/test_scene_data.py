@@ -58,6 +58,29 @@ try:
 except ValueError:
     pass
 
+# --- validação (hardening): position/scale inválidos não passam mais
+# batido -- sem isso, um valor ruim só quebrava lá na frente, com um
+# KeyError cru dentro de engine.py (x_positions[position]) ---
+for posicao_invalida in (0, 4, "2", None):
+    try:
+        SceneCharacter(character="jef", position=posicao_invalida)
+        assert False, f"esperava ValueError para position={posicao_invalida!r}"
+    except ValueError:
+        pass
+
+for escala_invalida in (0, -0.5, -1):
+    try:
+        SceneCharacter(character="jef", position=1, scale=escala_invalida)
+        assert False, f"esperava ValueError para scale={escala_invalida!r}"
+    except ValueError:
+        pass
+
+try:
+    campo.add_character("jef", position=99)
+    assert False, "esperava ValueError -- add_character reaproveita a validação de SceneCharacter"
+except ValueError:
+    pass
+
 # --- to_dict/from_dict/igualdade ---
 data = campo.to_dict()
 assert data["name"] == "campo"

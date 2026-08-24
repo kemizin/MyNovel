@@ -31,6 +31,11 @@ class CharacterData:
 
     def add_emotion(self, name, idle, talking=None):
 
+        if not name or not str(name).strip():
+            raise ValueError(
+                f"A emoção de {self.name!r} precisa de um nome não vazio."
+            )
+
         if not idle or not str(idle).strip():
             raise ValueError(
                 f"A emoção {name!r} de {self.name!r} precisa de um sprite 'idle'."

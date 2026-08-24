@@ -43,6 +43,15 @@ try:
 except ValueError:
     pass
 
+# --- validação (hardening): nome de emoção vazio também não passa
+# mais batido -- antes só o Studio checava isso na interface ---
+for nome_invalido in ("", "   ", None):
+    try:
+        jef.add_emotion(nome_invalido, idle="jef_idle.png")
+        assert False, f"esperava ValueError para nome={nome_invalido!r}"
+    except ValueError:
+        pass
+
 # --- to_dict/from_dict/igualdade ---
 data = jef.to_dict()
 assert data == {

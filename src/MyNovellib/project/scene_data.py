@@ -29,6 +29,16 @@ class SceneCharacter:
                 "SceneCharacter precisa de um 'character' (id/nome) não vazio."
             )
 
+        if position not in (1, 2, 3):
+            raise ValueError(
+                f"SceneCharacter.position precisa ser 1, 2 ou 3 (veio {position!r})."
+            )
+
+        if scale <= 0:
+            raise ValueError(
+                f"SceneCharacter.scale precisa ser maior que zero (veio {scale!r})."
+            )
+
         self.character = character
         self.position = position
         self.scale = scale
