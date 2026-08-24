@@ -62,12 +62,17 @@ app.explorer.selection_set("category:character")
 app._on_explorer_select()
 assert app.properties_label.cget("text") == "Personagens: 1"
 
-# --- selecionar um personagem mostra nome + emocoes ---
+# --- selecionar um personagem abre o Character Editor (Waystone 7),
+# nao mais um texto somente-leitura -- so confirma que o editor
+# aparece; o comportamento dele em detalhe e testado em
+# test_studio_character_editor.py ---
 app.explorer.selection_set("character:mika")
 app._on_explorer_select()
-texto = app.properties_label.cget("text")
-assert "Mika" in texto
-assert "normal" in texto
+labels_do_editor = [
+    w.cget("text") for w in app.properties_content.winfo_children()
+    if isinstance(w, tk.Label)
+]
+assert "CHARACTER" in labels_do_editor
 
 # --- selecionar uma cena mostra fundo/musica/quantidade de personagens ---
 app.explorer.selection_set("scene:praca")

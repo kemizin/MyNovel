@@ -156,7 +156,11 @@ class StudioApp:
         self.asset_tree.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         self.asset_tree.bind("<<TreeviewSelect>>", self._on_asset_tree_select)
 
-        # --- painel PROPERTIES (info + thumbnail do item selecionado) ---
+        # --- painel PROPERTIES: resumo somente-leitura (com thumbnail
+        # sob demanda) para a maioria dos itens, ou um editor de
+        # verdade quando o item tiver um (por enquanto só Character --
+        # ver _show_properties/_build_character_editor). O conteúdo é
+        # reconstruído a cada seleção (self.properties_content).
         properties_frame = tk.Frame(self.main_area)
         properties_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -164,22 +168,10 @@ class StudioApp:
             properties_frame, text="PROPERTIES", anchor="w", font=("", 9, "bold")
         ).pack(fill=tk.X, padx=8, pady=(8, 0))
 
-        # thumbnail: só aparece quando o item selecionado tem imagem.
-        # Nenhuma imagem é carregada até o usuário selecionar algo
-        # (lazy loading) -- ver _update_properties_thumbnail().
-        self.properties_image_label = tk.Label(properties_frame)
-        self.properties_image_label.pack(padx=8, pady=(8, 0))
+        self.properties_content = tk.Frame(properties_frame)
+        self.properties_content.pack(fill=tk.BOTH, expand=True)
 
-        self.properties_label = tk.Label(
-            properties_frame,
-            text=self._PLACEHOLDER_TEXT,
-            justify=tk.LEFT,
-            anchor="nw",
-            fg="gray40",
-            padx=8,
-            pady=8,
-        )
-        self.properties_label.pack(fill=tk.BOTH, expand=True)
+        self._build_readonly_properties(self._PLACEHOLDER_TEXT, thumbnail_iid=None)
 
         self.explorer_frame = sidebar_frame
         self.properties_frame = properties_frame
@@ -461,17 +453,46 @@ class StudioApp:
 
         self._show_properties(selection[0])
 
+    # Reconstrói o painel Properties pro item selecionado. Character
+    # tem um editor de verdade (Waystone 7); todo o resto continua
+    # como resumo somente-leitura (com thumbnail sob demanda, se o
+    # item for um asset de imagem).
     def _show_properties(self, iid):
 
-        self.properties_label.config(text=self._describe_selection(iid))
-        self._update_properties_thumbnail(iid)
+        for widget in self.properties_content.winfo_children():
+            widget.destroy()
+
+        if iid.startswith("character:"):
+            self._build_character_editor(iid.split(":", 1)[1])
+            return
+
+        self._build_readonly_properties(self._describe_selection(iid), thumbnail_iid=iid)
+
+    # Resumo somente-leitura: thumbnail (se aplicável) + texto.
+    def _build_readonly_properties(self, text, thumbnail_iid):
+
+        self.properties_image_label = tk.Label(self.properties_content)
+        self.properties_image_label.pack(padx=8, pady=(8, 0))
+
+        self.properties_label = tk.Label(
+            self.properties_content,
+            text=text,
+            justify=tk.LEFT,
+            anchor="nw",
+            fg="gray40",
+            padx=8,
+            pady=8,
+        )
+        self.properties_label.pack(fill=tk.BOTH, expand=True)
+
+        self._update_properties_thumbnail(thumbnail_iid)
 
     # Mostra a thumbnail do asset selecionado (se ele tiver imagem) no
     # painel Properties, ou some com a thumbnail se não tiver.
     # tkinter.PhotoImage (nativo, sem Pillow) -- suporta PNG direto.
     def _update_properties_thumbnail(self, iid):
 
-        image = self._load_thumbnail(iid)
+        image = self._load_thumbnail(iid) if iid is not None else None
 
         self.properties_image_label.config(image=image or "")
         self.properties_image_label.image = image  # guarda a referência (senão o Tk descarta)
@@ -591,6 +612,221 @@ class StudioApp:
         nome, colecao = rotulos[kind]
 
         return f"{nome}: {len(colecao)}"
+
+    # --- Character Editor -------------------------------------------
+    #
+    # Primeiro editor de verdade do Studio. Edita CharacterData (dado
+    # de projeto) -- NUNCA o Character de Runtime (src/MyNovellib/
+    # character.py), que nem é importado aqui. O fluxo é:
+    #
+    #     Studio edita CharacterData -> File > Save grava no projeto
+    #     -> o Runtime transforma CharacterData em Character depois
+    #        (Project Runtime Loading), quando o projeto for rodado.
+    #
+    # Nada aqui salva em disco sozinho -- só marca dirty (mark_dirty).
+
+    def _build_character_editor(self, character_key):
+
+        data = self.project.characters[character_key]
+        parent = self.properties_content
+
+        tk.Label(
+            parent, text="CHARACTER", anchor="w", font=("", 9, "bold")
+        ).pack(fill=tk.X, padx=8, pady=(8, 0))
+
+        name_row = tk.Frame(parent)
+        name_row.pack(fill=tk.X, padx=8, pady=(8, 4))
+        tk.Label(name_row, text="Name:", width=8, anchor="w").pack(side=tk.LEFT)
+
+        name_var = tk.StringVar(value=data.name)
+        tk.Entry(name_row, textvariable=name_var).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+
+        def on_name_change(*_):
+
+            novo_nome = name_var.get().strip()
+
+            if not novo_nome or novo_nome == data.name:
+                return
+
+            data.name = novo_nome
+            self.mark_dirty()
+
+            item_id = f"character:{character_key}"
+            if self.explorer.exists(item_id):
+                self.explorer.item(item_id, text=novo_nome)
+
+        name_var.trace_add("write", on_name_change)
+
+        tk.Label(
+            parent, text="Emotions:", anchor="w", font=("", 9, "bold")
+        ).pack(fill=tk.X, padx=8, pady=(12, 0))
+
+        emotions_area = tk.Frame(parent)
+        emotions_area.pack(fill=tk.BOTH, expand=True, padx=8)
+
+        for emotion_name in sorted(data.emotions):
+            self._build_emotion_row(emotions_area, data, character_key, emotion_name)
+
+        tk.Button(
+            parent,
+            text="+ Add Emotion",
+            command=lambda: self._open_add_emotion_dialog(character_key),
+        ).pack(anchor="w", padx=8, pady=(8, 8))
+
+    def _build_emotion_row(self, parent, data, character_key, emotion_name):
+
+        sprites = data.emotions[emotion_name]
+
+        row = tk.LabelFrame(parent, text=emotion_name, padx=6, pady=4)
+        row.pack(fill=tk.X, pady=4)
+
+        idle_var = tk.StringVar(value=sprites.get("idle") or "")
+        talking_var = tk.StringVar(value=sprites.get("talking") or "")
+
+        def on_idle_change(*_):
+            data.emotions[emotion_name]["idle"] = idle_var.get().strip()
+            self.mark_dirty()
+
+        def on_talking_change(*_):
+            valor = talking_var.get().strip()
+            data.emotions[emotion_name]["talking"] = valor or None
+            self.mark_dirty()
+
+        idle_var.trace_add("write", on_idle_change)
+        talking_var.trace_add("write", on_talking_change)
+
+        idle_row = tk.Frame(row)
+        idle_row.pack(fill=tk.X)
+        tk.Label(idle_row, text="Idle:", width=8, anchor="w").pack(side=tk.LEFT)
+        tk.Entry(idle_row, textvariable=idle_var).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        tk.Button(
+            idle_row, text="Browse...", command=lambda: self._browse_sprite(idle_var)
+        ).pack(side=tk.LEFT, padx=(4, 0))
+
+        talking_row = tk.Frame(row)
+        talking_row.pack(fill=tk.X, pady=(2, 0))
+        tk.Label(talking_row, text="Talking:", width=8, anchor="w").pack(side=tk.LEFT)
+        tk.Entry(talking_row, textvariable=talking_var).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        tk.Button(
+            talking_row,
+            text="Browse...",
+            command=lambda: self._browse_sprite(talking_var),
+        ).pack(side=tk.LEFT, padx=(4, 0))
+
+        tk.Button(
+            row,
+            text="Remove Emotion",
+            fg="red3",
+            command=lambda: self._remove_emotion(character_key, emotion_name),
+        ).pack(anchor="e", pady=(4, 0))
+
+    def _browse_sprite(self, string_var):
+
+        path = filedialog.askopenfilename(
+            title="Choose Image",
+            filetypes=[("Images", "*.png *.gif *.ppm *.pgm"), ("Todos os arquivos", "*.*")],
+        )
+
+        if path:
+            string_var.set(path)
+
+    def _remove_emotion(self, character_key, emotion_name):
+
+        data = self.project.characters[character_key]
+
+        del data.emotions[emotion_name]
+        self.mark_dirty()
+
+        self._show_properties(f"character:{character_key}")
+
+    def _open_add_emotion_dialog(self, character_key):
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Add Emotion")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        name_var = tk.StringVar()
+        idle_var = tk.StringVar()
+        talking_var = tk.StringVar()
+
+        pad = {"padx": 8, "pady": 4}
+
+        tk.Label(dialog, text="Emotion name:").grid(row=0, column=0, sticky="w", **pad)
+        tk.Entry(dialog, textvariable=name_var, width=28).grid(
+            row=0, column=1, columnspan=2, sticky="we", **pad
+        )
+
+        tk.Label(dialog, text="Idle:").grid(row=1, column=0, sticky="w", **pad)
+        tk.Entry(dialog, textvariable=idle_var, width=28).grid(
+            row=1, column=1, sticky="we", **pad
+        )
+        tk.Button(
+            dialog, text="Browse...", command=lambda: self._browse_sprite(idle_var)
+        ).grid(row=1, column=2, **pad)
+
+        tk.Label(dialog, text="Talking (optional):").grid(
+            row=2, column=0, sticky="w", **pad
+        )
+        tk.Entry(dialog, textvariable=talking_var, width=28).grid(
+            row=2, column=1, sticky="we", **pad
+        )
+        tk.Button(
+            dialog, text="Browse...", command=lambda: self._browse_sprite(talking_var)
+        ).grid(row=2, column=2, **pad)
+
+        def on_add():
+
+            criado = self.add_emotion(
+                character_key, name_var.get(), idle_var.get(), talking_var.get()
+            )
+
+            if criado:
+                dialog.destroy()
+
+        tk.Button(dialog, text="Add", command=on_add).grid(
+            row=3, column=0, columnspan=3, pady=(12, 8)
+        )
+
+        self.add_emotion_dialog = dialog
+
+        return dialog
+
+    # Adiciona a emoção de verdade -- separado do diálogo, testável
+    # direto. Reaproveita CharacterData.add_emotion() (Project System
+    # Update, Waystone 5), inclusive a validação de lá (idle não
+    # vazio).
+    def add_emotion(self, character_key, name, idle, talking=""):
+
+        data = self.project.characters[character_key]
+
+        name = (name or "").strip()
+        idle = (idle or "").strip()
+        talking = (talking or "").strip() or None
+
+        # CharacterData.add_emotion() só valida "idle" -- "name" vazio
+        # é checado aqui, no nível da interface.
+        if not name:
+            messagebox.showerror(APP_TITLE, "Informe um nome para a emoção.")
+            return False
+
+        try:
+            data.add_emotion(name, idle=idle, talking=talking)
+
+        except ValueError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return False
+
+        self.mark_dirty()
+        self._show_properties(f"character:{character_key}")
+
+        return True
 
     # --- Salvar -------------------------------------------------------
     #
