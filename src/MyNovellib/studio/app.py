@@ -8,8 +8,7 @@ import os
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 
-from src.MyNovellib.project.model import Project
-from src.MyNovellib.project.directory import create_project
+from src.MyNovellib.studio.core import StudioCore, StudioError
 
 APP_TITLE = "MyNovel Studio"
 
@@ -23,9 +22,12 @@ class StudioApp:
 
         self.root = root if root is not None else tk.Tk()
 
-        self.project = None
-        self.project_path = None  # caminho exato do .mynovel aberto/salvo
-        self.dirty = False  # via property -- já atualiza o título (ver _update_title)
+        # StudioCore concentra a lógica de negócio (validar, criar,
+        # carregar, salvar) sem tocar em Tkinter -- StudioApp só chama
+        # o Core e traduz o resultado em tela/messagebox. project/
+        # project_path/dirty (abaixo) delegam pra lá.
+        self.core = StudioCore()
+        self._update_title()
 
         self.root.geometry("1024x700")
         self.root.minsize(640, 480)
@@ -266,50 +268,20 @@ class StudioApp:
 
         return dialog
 
-    # Cria o projeto de verdade: valida os campos, reaproveita
-    # create_project() (Project System Update, sem duplicar nenhuma
-    # lógica de criação) e abre o projeto recém-criado no Studio.
-    # Retorna True em sucesso, False se algo for inválido (e mostra o
-    # erro correspondente) -- o diálogo usa o retorno pra saber se
-    # pode se fechar.
+    # Cria o projeto de verdade: repassa pro Core (validação + criação
+    # + carregamento). Retorna True em sucesso, False se algo for
+    # inválido (e mostra o erro correspondente) -- o diálogo usa o
+    # retorno pra saber se pode se fechar.
     def create_new_project(self, name, location, width, height):
 
-        name = (name or "").strip()
-        location = (location or "").strip()
-
-        if not name:
-            messagebox.showerror(APP_TITLE, "Informe um nome para o projeto.")
-            return False
-
-        if not location:
-            messagebox.showerror(APP_TITLE, "Informe onde o projeto deve ser criado.")
-            return False
-
         try:
-            width = int(width)
-            height = int(height)
+            self.core.create_new_project(name, location, width, height)
 
-            if width <= 0 or height <= 0:
-                raise ValueError
-
-        except (TypeError, ValueError):
-            messagebox.showerror(
-                APP_TITLE, "Largura e altura precisam ser números inteiros positivos."
-            )
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
             return False
 
-        project_path = os.path.join(location, name)
-
-        try:
-            directory = create_project(project_path, name=name, resolution=(width, height))
-
-        except FileExistsError as error:
-            messagebox.showerror(
-                APP_TITLE, f"Não foi possível criar o projeto:\n\n{error}"
-            )
-            return False
-
-        self.load_project(directory.project_file)
+        self._on_project_loaded()
 
         return True
 
@@ -332,26 +304,22 @@ class StudioApp:
         self.load_project(path)
 
     # Carrega um project.mynovel pelo caminho e atualiza a interface.
-    # Reaproveita Project.load() -- nenhuma lógica de carregamento
-    # duplicada aqui.
+    # Repassa pro Core -- nenhuma lógica de carregamento duplicada
+    # aqui.
     def load_project(self, path):
 
         try:
-            project = Project.load(path)
+            self.core.load_project(path)
 
-        except (FileNotFoundError, ValueError) as error:
-            messagebox.showerror(
-                APP_TITLE, f"Não foi possível abrir o projeto:\n\n{error}"
-            )
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
             return
 
-        self.project = project
-        self.project_path = os.path.abspath(path)
         self._on_project_loaded()
 
     def _on_project_loaded(self):
 
-        self.dirty = False  # via property -- já atualiza o título
+        self._update_title()  # o Core já limpou o dirty ao carregar
         self.set_status(f'Projeto "{self.project.name}" carregado.')
         self._set_project_actions_enabled(True)
         self._refresh_explorer()
@@ -368,18 +336,40 @@ class StudioApp:
         self.toolbar_buttons["Save"].config(state=state)
         self.toolbar_buttons["Play"].config(state=state)
 
+    # project/project_path/dirty vivem no Core (StudioCore) -- essas
+    # properties só delegam pra lá, então tanto o resto do StudioApp
+    # quanto o código existente de teste ("app.project = ...",
+    # "app.dirty = True") continuam funcionando exatamente igual.
+    @property
+    def project(self):
+        return self.core.project
+
+    @project.setter
+    def project(self, value):
+        self.core.project = value
+
+    @property
+    def project_path(self):
+        return self.core.project_path
+
+    @project_path.setter
+    def project_path(self, value):
+        self.core.project_path = value
+
     # `dirty` é property (não atributo simples) justamente pra que
     # QUALQUER jeito de mudar seu valor -- mark_dirty(), Save, carregar
     # um projeto, ou até "app.dirty = True" direto (como os testes já
     # fazem) -- atualize o título da janela sozinho, sem precisar
-    # lembrar de chamar mais nada em cada ponto de edição.
+    # lembrar de chamar mais nada em cada ponto de edição. O valor em
+    # si mora no Core (self.core.dirty); só o efeito colateral de
+    # atualizar o título é responsabilidade do StudioApp.
     @property
     def dirty(self):
-        return self._dirty
+        return self.core.dirty
 
     @dirty.setter
     def dirty(self, value):
-        self._dirty = bool(value)
+        self.core.dirty = bool(value)
         self._update_title()
 
     # Título reflete o estado de dirty: "MyNovel Studio — MeuJogo *"
@@ -391,7 +381,7 @@ class StudioApp:
             self.root.title(APP_TITLE)
             return
 
-        marcador = " *" if self._dirty else ""
+        marcador = " *" if self.dirty else ""
         self.root.title(f"{APP_TITLE} — {self.project.name}{marcador}")
 
     # Chamado por qualquer edição (Character/Scene/Story/Project) pra
@@ -1273,8 +1263,8 @@ class StudioApp:
 
     # --- Salvar -------------------------------------------------------
     #
-    # Usa Project.save() diretamente (Project System Update, Waystone
-    # 2) -- nenhum sistema de persistência paralelo.
+    # O salvamento em si (Project.save()) mora no Core -- nenhum
+    # sistema de persistência paralelo aqui.
 
     def save_project(self):
 
@@ -1309,12 +1299,9 @@ class StudioApp:
     # sem precisar simular o file dialog do Save As.
     def _save_project_to(self, path):
 
-        self.project.save(path)
+        self.core.save_project_to(path)
 
-        self.project_path = os.path.abspath(path)
-        self.project.loaded_from = os.path.dirname(self.project_path)
-
-        self.dirty = False
+        self._update_title()  # o Core já limpou o dirty ao salvar
         self.set_status(f'Projeto "{self.project.name}" salvo.')
 
     # --- Ações --------------------------------------------------------
