@@ -68,6 +68,9 @@ class StudioApp:
         edit_menu.add_command(
             label="New Scene...", command=self.new_scene, state=tk.DISABLED
         )
+        edit_menu.add_command(
+            label="New Story...", command=self.new_story, state=tk.DISABLED
+        )
         menubar.add_cascade(label="Edit", menu=edit_menu)
 
         scene_menu = tk.Menu(menubar, tearoff=False)
@@ -426,6 +429,67 @@ class StudioApp:
 
         return True
 
+    # --- Nova história --------------------------------------------------
+    #
+    # Mesmo princípio: new_story() só abre o diálogo; create_story(...)
+    # faz o trabalho de verdade. Só o nome -- a história nasce sem
+    # nenhuma Action ainda (não existe editor de história -- Story
+    # Editor -- nesta fase; selecioná-la mostra o resumo somente-
+    # leitura de sempre, "Ações: 0").
+
+    def new_story(self):
+        self._open_new_story_dialog()
+
+    def _open_new_story_dialog(self):
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("New Story")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        name_var = tk.StringVar()
+
+        pad = {"padx": 8, "pady": 4}
+
+        tk.Label(dialog, text="Name:").grid(row=0, column=0, sticky="w", **pad)
+        entry = tk.Entry(dialog, textvariable=name_var, width=28)
+        entry.grid(row=0, column=1, sticky="we", **pad)
+        entry.focus_set()
+
+        def on_create():
+            criado = self.create_story(name_var.get())
+            if criado:
+                dialog.destroy()
+
+        tk.Button(dialog, text="Create", command=on_create).grid(
+            row=1, column=0, columnspan=2, pady=(12, 8)
+        )
+
+        self.new_story_dialog = dialog
+
+        return dialog
+
+    # Cria a história de verdade -- separado do diálogo, testável
+    # direto. Repassa pro Core; ao terminar, seleciona a história
+    # recém-criada no Explorer.
+    def create_story(self, name):
+
+        try:
+            key = self.core.create_story(name)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return False
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_explorer()
+
+        item_id = f"story:{key}"
+        self.explorer.selection_set(item_id)
+        self._show_properties(item_id)
+
+        return True
+
     # --- Projeto ------------------------------------------------------
     #
     # Só chama tkinter.filedialog aqui; carregar de fato fica em
@@ -477,6 +541,7 @@ class StudioApp:
         self.menus["Build"].entryconfig("Play", state=state)
         self.menus["Edit"].entryconfig("New Character...", state=state)
         self.menus["Edit"].entryconfig("New Scene...", state=state)
+        self.menus["Edit"].entryconfig("New Story...", state=state)
         self.toolbar_buttons["Save"].config(state=state)
         self.toolbar_buttons["Play"].config(state=state)
 

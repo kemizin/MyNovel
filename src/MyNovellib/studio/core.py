@@ -22,6 +22,7 @@ from src.MyNovellib.project.model import Project
 from src.MyNovellib.project.directory import create_project
 from src.MyNovellib.project.character_data import CharacterData
 from src.MyNovellib.project.scene_data import SceneData
+from src.MyNovellib.project.story_data import StoryData
 
 
 # Erro de uma operação do Core -- a mensagem já vem pronta pra
@@ -225,3 +226,24 @@ class StudioCore:
             raise StudioError(f"Valor inválido em {field}: {error}")
 
         self.dirty = True
+
+    # --- Story -------------------------------------------------------
+
+    # Cria uma StoryData vazia (sem Action nenhuma ainda -- não existe
+    # Story Editor nesta fase pra preencher o conteúdo). Devolve a
+    # chave gerada.
+    def create_story(self, name):
+
+        name = (name or "").strip()
+
+        try:
+            story = StoryData(name=name)
+
+        except ValueError as error:
+            raise StudioError(str(error))
+
+        key = _generate_key(name, self.project.stories, fallback="historia")
+        self.project.stories[key] = story
+        self.dirty = True
+
+        return key

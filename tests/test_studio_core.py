@@ -179,6 +179,20 @@ try:
     except StudioError:
         pass
 
+    # --- create_story: nasce sem Action nenhuma ---
+    chave_historia = core.create_story("Introdução")
+    assert chave_historia == "introducao"
+    assert core.project.stories[chave_historia].actions == []
+
+    outra_historia = core.create_story("Introdução")
+    assert outra_historia == "introducao_2"
+
+    try:
+        core.create_story("")
+        assert False, "esperava StudioError (nome vazio)"
+    except StudioError:
+        pass
+
     # --- apply_scene_field: mexe em SceneCharacter de verdade,
     # incluindo a validação que agora mora lá (position/scale) ---
     praca = SceneData(name="praca", background="assets/backgrounds/praca.png")

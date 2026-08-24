@@ -71,12 +71,13 @@ assert estados["New Project..."] == "normal"
 assert estados["Open Project..."] == "normal"
 assert estados["Exit"] == "normal"
 
-# --- Edit tem "New Character.../New Scene..." (Hardening),
-# desabilitados ate abrir um projeto -- Scene continua sem itens
-# (nada fake) ---
+# --- Edit tem "New Character.../New Scene.../New Story..."
+# (Hardening), desabilitados ate abrir um projeto -- Scene continua
+# sem itens (nada fake) ---
 assert menu_entries(app.menus["Edit"]) == [
     ("New Character...", "disabled"),
     ("New Scene...", "disabled"),
+    ("New Story...", "disabled"),
 ]
 assert menu_entries(app.menus["Scene"]) == []
 
