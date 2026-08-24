@@ -22,7 +22,7 @@ from src.MyNovellib.project.model import Project
 from src.MyNovellib.project.directory import create_project
 from src.MyNovellib.project.character_data import CharacterData
 from src.MyNovellib.project.scene_data import SceneData
-from src.MyNovellib.project.story_data import StoryData
+from src.MyNovellib.project.story_data import StoryData, ActionData
 
 
 # Erro de uma operação do Core -- a mensagem já vem pronta pra
@@ -318,4 +318,38 @@ class StudioCore:
         except ValueError as error:
             raise StudioError(str(error))
 
+        self.dirty = True
+
+    # Substitui os campos da Action em `index` -- o tipo não muda
+    # (trocar de tipo é remover + adicionar de novo, não editar; os
+    # campos válidos são completamente diferentes por tipo). Constrói
+    # uma ActionData nova pra reaproveitar a validação de campo
+    # obrigatório (ActionData.__init__) em vez de mexer em
+    # story.actions[index].fields direto e arriscar um dict
+    # inconsistente.
+    def update_story_action(self, story_key, index, **fields):
+
+        story = self.project.stories[story_key]
+
+        if index < 0 or index >= len(story.actions):
+            raise StudioError("Action não encontrada.")
+
+        action_type = story.actions[index].type
+
+        try:
+            story.actions[index] = ActionData(action_type, **fields)
+
+        except ValueError as error:
+            raise StudioError(str(error))
+
+        self.dirty = True
+
+    def remove_story_action(self, story_key, index):
+
+        story = self.project.stories[story_key]
+
+        if index < 0 or index >= len(story.actions):
+            raise StudioError("Action não encontrada.")
+
+        del story.actions[index]
         self.dirty = True

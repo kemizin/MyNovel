@@ -299,6 +299,40 @@ try:
 
     assert len(core.project.stories["capitulo_extra"].actions) == 2  # nenhum erro adicionou nada
 
+    # --- update_story_action: troca os campos, tipo continua o mesmo ---
+    core.dirty = False
+    core.update_story_action("capitulo_extra", 0, character="mika", text="Oi de novo!")
+
+    acao_atualizada = core.project.stories["capitulo_extra"].actions[0]
+    assert acao_atualizada.type == "speak"  # tipo não muda
+    assert acao_atualizada.fields["text"] == "Oi de novo!"
+    assert core.dirty is True
+
+    try:
+        core.update_story_action("capitulo_extra", 0, character="mika")  # falta "text"
+        assert False, "esperava StudioError (campo obrigatório faltando)"
+    except StudioError:
+        pass
+
+    try:
+        core.update_story_action("capitulo_extra", 99, character="mika", text="x")
+        assert False, "esperava StudioError (índice fora do range)"
+    except StudioError:
+        pass
+
+    # --- remove_story_action ---
+    core.dirty = False
+    core.remove_story_action("capitulo_extra", 1)  # remove o "pause"
+    assert len(core.project.stories["capitulo_extra"].actions) == 1
+    assert core.project.stories["capitulo_extra"].actions[0].type == "speak"
+    assert core.dirty is True
+
+    try:
+        core.remove_story_action("capitulo_extra", 99)
+        assert False, "esperava StudioError (índice fora do range)"
+    except StudioError:
+        pass
+
 finally:
     shutil.rmtree(tmp_dir, ignore_errors=True)
 

@@ -716,11 +716,13 @@ class StudioApp:
     #
     # Lista ordenada das Actions da história (a ordem é a ordem de
     # execução -- por isso Listbox, não Treeview: reordenar itens de
-    # uma lista plana mais tarde, waystone seguinte, é simples de
-    # fazer com delete/insert). Cada linha usa ActionData.describe()
+    # uma lista plana, waystone seguinte, é simples de fazer com
+    # delete/insert). Cada linha usa ActionData.describe()
     # (project/story_data.py) -- o Studio não reimplementa esse texto.
-    # "+ Add Action" adiciona ao final; editar/remover/reordenar uma
-    # Action existente ainda não existe (próximos waystones).
+    # "+ Add Action" adiciona ao final; clicar numa Action da lista
+    # abre os campos dela pra editar (mesmo padrão do painel
+    # Properties da Scene) + um botão pra remover. Reordenar ainda não
+    # existe (próximo waystone).
 
     ACTION_TYPES = ("speak", "emotion", "move", "enter", "exit", "pause")
 
@@ -741,7 +743,8 @@ class StudioApp:
         ).pack(fill=tk.X, padx=8, pady=(4, 4))
 
         listbox = tk.Listbox(parent, activestyle="none")
-        listbox.pack(fill=tk.BOTH, expand=True, padx=8)
+        listbox.pack(fill=tk.X, padx=8)
+        listbox.bind("<<ListboxSelect>>", self._on_story_action_select)
 
         for action in data.actions:
             listbox.insert(tk.END, action.describe())
@@ -755,12 +758,132 @@ class StudioApp:
             command=lambda: self._open_add_action_dialog(story_key),
         ).pack(anchor="w", padx=8, pady=(8, 4))
 
+        self.story_action_properties_frame = tk.Frame(parent)
+        self.story_action_properties_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(4, 8))
+
+        self._render_story_action_properties()
+
         tk.Button(
             parent,
             text="Delete Story",
             fg="red3",
             command=lambda: self._delete_story(story_key),
         ).pack(anchor="w", padx=8, pady=(0, 8))
+
+    def _on_story_action_select(self, event=None):
+        self._render_story_action_properties()
+
+    # Repovoa só o CONTEÚDO da listbox (não reconstrói o Story Editor
+    # inteiro) -- preserva a seleção atual quando ela ainda existe,
+    # pra editar/atualizar uma Action não jogar o usuário de volta pro
+    # "nada selecionado".
+    def _refresh_story_listbox(self):
+
+        selecionado = self.story_listbox.curselection()
+
+        self.story_listbox.delete(0, tk.END)
+
+        for action in self.project.stories[self.story_editor_key].actions:
+            self.story_listbox.insert(tk.END, action.describe())
+
+        if selecionado and selecionado[0] < self.story_listbox.size():
+            self.story_listbox.selection_set(selecionado[0])
+
+    # Painel abaixo da lista: sem seleção, um texto de instrução; com
+    # uma Action selecionada, os campos dela (pré-preenchidos, mesmo
+    # builder do diálogo Add Action) + Update Action/Remove Action. O
+    # TIPO da Action não é editável aqui -- trocar de tipo muda por
+    # completo quais campos são válidos, então é remover e adicionar
+    # de novo, não editar.
+    def _render_story_action_properties(self):
+
+        for widget in self.story_action_properties_frame.winfo_children():
+            widget.destroy()
+
+        selection = self.story_listbox.curselection()
+
+        if not selection:
+            tk.Label(
+                self.story_action_properties_frame,
+                text="Clique numa Action na lista para editar.",
+                fg="gray40",
+                anchor="w",
+            ).pack(fill=tk.X)
+            return
+
+        index = selection[0]
+        data = self.project.stories[self.story_editor_key]
+
+        if index >= len(data.actions):
+            return
+
+        action = data.actions[index]
+
+        tk.Label(
+            self.story_action_properties_frame,
+            text=f"Action: {action.type}",
+            anchor="w",
+            font=("", 9, "bold"),
+        ).pack(fill=tk.X, pady=(4, 6))
+
+        fields_frame = tk.Frame(self.story_action_properties_frame)
+        fields_frame.pack(fill=tk.X)
+
+        field_vars = {}
+        self._build_action_type_fields(fields_frame, action.type, field_vars, initial=action.fields)
+
+        def on_update():
+
+            try:
+                kwargs = self._action_kwargs_from_vars(action.type, field_vars)
+
+            except ValueError as error:
+                messagebox.showerror(APP_TITLE, str(error))
+                return
+
+            self.update_story_action(self.story_editor_key, index, **kwargs)
+
+        buttons_row = tk.Frame(self.story_action_properties_frame)
+        buttons_row.pack(fill=tk.X, pady=(8, 0))
+
+        tk.Button(buttons_row, text="Update Action", command=on_update).pack(side=tk.LEFT)
+        tk.Button(
+            buttons_row,
+            text="Remove Action",
+            fg="red3",
+            command=lambda: self._remove_story_action(index),
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+    # Substitui os campos da Action selecionada -- separado do botão,
+    # testável direto. Mantém a seleção (só a listbox é repovoada, não
+    # o editor inteiro) pra continuar mostrando a mesma Action editada.
+    def update_story_action(self, story_key, index, **fields):
+
+        try:
+            self.core.update_story_action(story_key, index, **fields)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return False
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_story_listbox()
+        self._render_story_action_properties()
+
+        return True
+
+    def _remove_story_action(self, index):
+
+        try:
+            self.core.remove_story_action(self.story_editor_key, index)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_story_listbox()
+        self._render_story_action_properties()
 
     def _delete_story(self, story_key):
 
@@ -843,17 +966,27 @@ class StudioApp:
     # ActionData.fields usa). "Character" aparece pra todos os tipos
     # menos "pause" -- sempre um combobox com os personagens do
     # projeto (não dá pra digitar um personagem que não existe).
-    def _build_action_type_fields(self, parent, action_type, field_vars):
+    #
+    # `initial` (opcional) pré-preenche os campos com valores já
+    # existentes -- usado tanto por Add Action (sem initial, tudo
+    # vazio) quanto por editar uma Action já na lista (initial =
+    # action.fields), reaproveitando o mesmo layout pros dois casos.
+    def _build_action_type_fields(self, parent, action_type, field_vars, initial=None):
 
+        initial = initial or {}
         pad = {"padx": 8, "pady": 4}
         row = 0
         character_combo = None
+
+        def valor_inicial(campo):
+            valor = initial.get(campo)
+            return "" if valor is None else str(valor)
 
         if action_type != "pause":
 
             tk.Label(parent, text="Character:").grid(row=row, column=0, sticky="w", **pad)
 
-            character_var = tk.StringVar()
+            character_var = tk.StringVar(value=valor_inicial("character"))
             character_combo = ttk.Combobox(
                 parent, textvariable=character_var,
                 values=sorted(self.project.characters), state="readonly", width=22,
@@ -865,7 +998,7 @@ class StudioApp:
         if action_type == "speak":
 
             tk.Label(parent, text="Text:").grid(row=row, column=0, sticky="w", **pad)
-            text_var = tk.StringVar()
+            text_var = tk.StringVar(value=valor_inicial("text"))
             tk.Entry(parent, textvariable=text_var, width=30).grid(
                 row=row, column=1, sticky="we", **pad
             )
@@ -874,7 +1007,7 @@ class StudioApp:
         elif action_type == "emotion":
 
             tk.Label(parent, text="Emotion:").grid(row=row, column=0, sticky="w", **pad)
-            emotion_var = tk.StringVar()
+            emotion_var = tk.StringVar(value=valor_inicial("emotion"))
             emotion_combo = ttk.Combobox(
                 parent, textvariable=emotion_var, values=(), state="disabled", width=22,
             )
@@ -882,16 +1015,24 @@ class StudioApp:
             field_vars["emotion"] = emotion_var
 
             # a lista de emoções depende de qual personagem está
-            # escolhido -- atualiza sempre que o personagem mudar.
-            def on_character_change(event=None):
+            # escolhido -- popula de acordo com o personagem atual
+            # (já pré-preenchido, ao editar) e atualiza de novo sempre
+            # que o personagem mudar (aí sim limpando a emoção, que
+            # provavelmente não existe mais pro personagem novo).
+            def refresh_emotion_options(reset):
 
                 character_data = self.project.characters.get(field_vars["character"].get())
                 opcoes = sorted(character_data.emotions) if character_data else []
 
                 emotion_combo.config(values=opcoes, state="readonly" if opcoes else "disabled")
-                emotion_var.set("")
 
-            character_combo.bind("<<ComboboxSelected>>", on_character_change)
+                if reset:
+                    emotion_var.set("")
+
+            character_combo.bind(
+                "<<ComboboxSelected>>", lambda event=None: refresh_emotion_options(reset=True)
+            )
+            refresh_emotion_options(reset=False)
 
         elif action_type in ("move", "enter"):
 
@@ -900,7 +1041,7 @@ class StudioApp:
                 ("offset_x", "Offset X:"), ("offset_y", "Offset Y:"),
             ):
                 tk.Label(parent, text=rotulo).grid(row=row, column=0, sticky="w", **pad)
-                var = tk.StringVar()
+                var = tk.StringVar(value=valor_inicial(campo))
                 tk.Entry(parent, textvariable=var, width=12).grid(
                     row=row, column=1, sticky="w", **pad
                 )
@@ -910,7 +1051,7 @@ class StudioApp:
         elif action_type == "pause":
 
             tk.Label(parent, text="Duration (s):").grid(row=row, column=0, sticky="w", **pad)
-            duration_var = tk.StringVar()
+            duration_var = tk.StringVar(value=valor_inicial("duration"))
             tk.Entry(parent, textvariable=duration_var, width=12).grid(
                 row=row, column=1, sticky="w", **pad
             )
