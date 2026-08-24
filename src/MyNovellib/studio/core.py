@@ -153,6 +153,35 @@ class StudioCore:
 
         return key
 
+    # Remove o personagem -- mas nunca em cascata: se ele estiver
+    # colocado em alguma cena (SceneCharacter.character) ou citado em
+    # alguma Action de história (fields["character"]), bloqueia com
+    # StudioError dizendo onde, em vez de apagar e deixar uma
+    # referência pendurada (o mesmo tipo de problema que o hardening
+    # de validação, Fase A, fechou pro position/scale).
+    def delete_character(self, character_key):
+
+        if character_key not in self.project.characters:
+            raise StudioError(f"Personagem {character_key!r} não existe neste projeto.")
+
+        usos = []
+
+        for scene in self.project.scenes.values():
+            if any(p.character == character_key for p in scene.characters):
+                usos.append(f'cena "{scene.name}"')
+
+        for story in self.project.stories.values():
+            if any(a.fields.get("character") == character_key for a in story.actions):
+                usos.append(f'história "{story.name}"')
+
+        if usos:
+            raise StudioError(
+                "Não é possível remover: personagem usado em " + ", ".join(usos) + "."
+            )
+
+        del self.project.characters[character_key]
+        self.dirty = True
+
     # Reaproveita CharacterData.add_emotion() (Project System) e toda
     # a validação de lá (idle e name não vazios) -- o Core não valida
     # nada por conta própria, só traduz o ValueError em StudioError.
@@ -203,6 +232,19 @@ class StudioCore:
 
         return key
 
+    # Remove a cena. Ao contrário de personagem, nada no modelo de
+    # dados guarda uma referência a uma cena por chave (uma história
+    # não "aponta" pra uma cena -- a escolha de qual cena/história
+    # rodar é feita por fora, em runtime.run(scene=..., story=...)) --
+    # não há o que bloquear aqui além da cena existir.
+    def delete_scene(self, scene_key):
+
+        if scene_key not in self.project.scenes:
+            raise StudioError(f"Cena {scene_key!r} não existe neste projeto.")
+
+        del self.project.scenes[scene_key]
+        self.dirty = True
+
     # `parse` só faz a conversão de tipo (str -> int/float, tipicamente
     # vindo de um Entry) -- quem valida o VALOR (position precisa ser
     # 1/2/3, scale precisa ser > 0) é o próprio SceneCharacter
@@ -247,3 +289,14 @@ class StudioCore:
         self.dirty = True
 
         return key
+
+    # Remove a história. Assim como cena, nada no modelo de dados
+    # referencia uma história por chave -- não há o que bloquear além
+    # dela existir.
+    def delete_story(self, story_key):
+
+        if story_key not in self.project.stories:
+            raise StudioError(f"História {story_key!r} não existe neste projeto.")
+
+        del self.project.stories[story_key]
+        self.dirty = True

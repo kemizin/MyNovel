@@ -706,7 +706,45 @@ class StudioApp:
             self._build_scene_editor(iid.split(":", 1)[1])
             return
 
+        if iid.startswith("story:"):
+            self._build_story_summary(iid.split(":", 1)[1])
+            return
+
         self._build_readonly_properties(self._describe_selection(iid), thumbnail_iid=iid)
+
+    # História ainda não tem editor de verdade (Story Editor -- fase
+    # seguinte do plano de hardening) -- por enquanto é o mesmo resumo
+    # somente-leitura de sempre, só que com um botão de apagar (senão
+    # uma história criada pelo Studio nunca teria como ser removida).
+    def _build_story_summary(self, story_key):
+
+        self._build_readonly_properties(
+            self._describe_selection(f"story:{story_key}"), thumbnail_iid=None
+        )
+
+        tk.Button(
+            self.properties_content,
+            text="Delete Story",
+            fg="red3",
+            command=lambda: self._delete_story(story_key),
+        ).pack(anchor="w", padx=8, pady=(0, 8))
+
+    def _delete_story(self, story_key):
+
+        nome = self.project.stories[story_key].name
+
+        if not messagebox.askyesno(APP_TITLE, f'Remover a história "{nome}"?'):
+            return
+
+        try:
+            self.core.delete_story(story_key)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_explorer()
 
     # Resumo somente-leitura: thumbnail (se aplicável) + texto.
     def _build_readonly_properties(self, text, thumbnail_iid):
@@ -915,6 +953,13 @@ class StudioApp:
             command=lambda: self._open_add_emotion_dialog(character_key),
         ).pack(anchor="w", padx=8, pady=(8, 8))
 
+        tk.Button(
+            parent,
+            text="Delete Character",
+            fg="red3",
+            command=lambda: self._delete_character(character_key),
+        ).pack(anchor="w", padx=8, pady=(0, 8))
+
     def _build_emotion_row(self, parent, data, character_key, emotion_name):
 
         sprites = data.emotions[emotion_name]
@@ -982,6 +1027,28 @@ class StudioApp:
 
         self._update_title()  # o Core já marcou dirty
         self._show_properties(f"character:{character_key}")
+
+    # Pede confirmação (diferente de Remove Emotion -- apagar um
+    # personagem inteiro é mais impactante que apagar uma emoção, e
+    # não tem "desfazer") antes de repassar pro Core, que bloqueia com
+    # StudioError se o personagem estiver em uso em alguma cena/
+    # história (nunca remove em cascata).
+    def _delete_character(self, character_key):
+
+        nome = self.project.characters[character_key].name
+
+        if not messagebox.askyesno(APP_TITLE, f'Remover o personagem "{nome}"?'):
+            return
+
+        try:
+            self.core.delete_character(character_key)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_explorer()
 
     def _open_add_emotion_dialog(self, character_key):
 
@@ -1113,8 +1180,38 @@ class StudioApp:
         self.scene_properties_frame = tk.Frame(parent)
         self.scene_properties_frame.pack(fill=tk.X, padx=8, pady=(0, 8))
 
+        # fora de scene_properties_frame de propósito -- aquele frame é
+        # reconstruído a cada seleção de personagem (_render_scene_properties),
+        # e o botão de apagar a cena inteira não deve piscar/mudar com isso.
+        tk.Button(
+            parent,
+            text="Delete Scene",
+            fg="red3",
+            command=lambda: self._delete_scene(scene_key),
+        ).pack(anchor="w", padx=8, pady=(0, 8))
+
         self._render_scene_canvas()
         self._render_scene_properties()
+
+    # Pede confirmação, repassa pro Core (que hoje não bloqueia --
+    # nada no modelo de dados referencia uma cena por chave, ver
+    # StudioCore.delete_scene) e atualiza o Explorer.
+    def _delete_scene(self, scene_key):
+
+        nome = self.project.scenes[scene_key].name
+
+        if not messagebox.askyesno(APP_TITLE, f'Remover a cena "{nome}"?'):
+            return
+
+        try:
+            self.core.delete_scene(scene_key)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return
+
+        self._update_title()  # o Core já marcou dirty
+        self._refresh_explorer()
 
     # Redesenha o canvas inteiro (background + personagens + contorno
     # de seleção). Chamado sempre que algo muda -- é uma cena estática

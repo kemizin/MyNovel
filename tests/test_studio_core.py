@@ -221,6 +221,57 @@ try:
     # index fora do range é no-op silencioso, não erro
     core.apply_scene_field("praca", 99, "scale", "0.1", float)
 
+    # --- delete_character: bloqueia se estiver em uso, nunca remove
+    # em cascata ---
+    try:
+        core.delete_character("mika")  # colocada na cena "praca" acima
+        assert False, "esperava StudioError (mika está na cena praca)"
+    except StudioError as error:
+        assert "praca" in str(error)
+
+    assert "mika" in core.project.characters  # não removeu nada
+
+    core.project.stories["introducao"].add_action(
+        "speak", character="novo_personagem_2", text="Oi!"
+    )
+    try:
+        core.delete_character("novo_personagem_2")
+        assert False, "esperava StudioError (citada na história introducao)"
+    except StudioError as error:
+        assert core.project.stories["introducao"].name in str(error)
+
+    # sem uso nenhum -- remove normalmente
+    core.dirty = False
+    core.delete_character("novo_personagem")
+    assert "novo_personagem" not in core.project.characters
+    assert core.dirty is True
+
+    try:
+        core.delete_character("nao_existe")
+        assert False, "esperava StudioError (personagem não existe)"
+    except StudioError:
+        pass
+
+    # --- delete_scene/delete_story: nada no modelo referencia cena ou
+    # história por chave -- não há o que bloquear ---
+    core.delete_scene("quarto")
+    assert "quarto" not in core.project.scenes
+
+    try:
+        core.delete_scene("nao_existe")
+        assert False, "esperava StudioError (cena não existe)"
+    except StudioError:
+        pass
+
+    core.delete_story("introducao_2")
+    assert "introducao_2" not in core.project.stories
+
+    try:
+        core.delete_story("nao_existe")
+        assert False, "esperava StudioError (história não existe)"
+    except StudioError:
+        pass
+
 finally:
     shutil.rmtree(tmp_dir, ignore_errors=True)
 
