@@ -24,6 +24,8 @@ class StudioApp:
         self.root = root if root is not None else tk.Tk()
 
         self.project = None
+        self.project_path = None  # caminho exato do .mynovel aberto/salvo
+        self.dirty = False
 
         self.root.title(APP_TITLE)
         self.root.geometry("1024x700")
@@ -47,15 +49,14 @@ class StudioApp:
         file_menu.add_command(label="New Project...", command=self.new_project)
         file_menu.add_command(label="Open Project...", command=self.open_project)
         file_menu.add_separator()
-        file_menu.add_command(label="Save", command=self._not_implemented)
-        file_menu.add_command(label="Save As...", command=self._not_implemented)
+        file_menu.add_command(label="Save", command=self.save_project)
+        file_menu.add_command(label="Save As...", command=self.save_project_as)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.on_close)
         menubar.add_cascade(label="File", menu=file_menu)
 
-        # Save/Save As ainda não existem -- ficam desabilitados até o
-        # Waystone que os implementa (não fingir que funcionam). New
-        # Project e Open Project já são reais (Waystones 4 e 2).
+        # Save/Save As só fazem sentido com um projeto aberto -- ficam
+        # desabilitados até New/Open Project carregarem um.
         for label in ("Save", "Save As..."):
             file_menu.entryconfig(label, state=tk.DISABLED)
 
@@ -94,13 +95,12 @@ class StudioApp:
 
         self.toolbar_buttons = {}
 
-        # espelha os comandos de File -- mesma regra do menu: New/Save
-        # desabilitados até os Waystones que os implementam; Open já é
-        # real (Waystone 2).
+        # espelha os comandos de File -- mesma regra do menu: Save só
+        # faz sentido com um projeto aberto.
         commands = {
             "New": self.new_project,
             "Open": self.open_project,
-            "Save": self._not_implemented,
+            "Save": self.save_project,
         }
 
         for label, command in commands.items():
@@ -317,13 +317,32 @@ class StudioApp:
             return
 
         self.project = project
+        self.project_path = os.path.abspath(path)
         self._on_project_loaded()
 
     def _on_project_loaded(self):
 
         self.root.title(f"{APP_TITLE} — {self.project.name}")
         self.set_status(f'Projeto "{self.project.name}" carregado.')
+        self.dirty = False
+        self._set_save_enabled(True)
         self._refresh_explorer()
+
+    def _set_save_enabled(self, enabled):
+
+        state = tk.NORMAL if enabled else tk.DISABLED
+
+        self.menus["File"].entryconfig("Save", state=state)
+        self.menus["File"].entryconfig("Save As...", state=state)
+        self.toolbar_buttons["Save"].config(state=state)
+
+    # Chamado por qualquer edição futura (Character/Scene/Story/
+    # Project) pra marcar que existem alterações não salvas. Ainda
+    # sem indicação visual no título (isso é o próximo Waystone,
+    # Dirty State) -- aqui só o mecanismo que a proteção ao fechar
+    # (on_close) e o Save já usam.
+    def mark_dirty(self):
+        self.dirty = True
 
     # Repovoa o Project Explorer com a árvore do projeto carregado:
     #
@@ -440,6 +459,52 @@ class StudioApp:
 
         return f"{nome}: {len(colecao)}"
 
+    # --- Salvar -------------------------------------------------------
+    #
+    # Usa Project.save() diretamente (Project System Update, Waystone
+    # 2) -- nenhum sistema de persistência paralelo.
+
+    def save_project(self):
+
+        if self.project is None:
+            return
+
+        if self.project_path is None:
+            # nunca foi salvo em lugar nenhum ainda -- pede onde salvar,
+            # igual Save As.
+            self.save_project_as()
+            return
+
+        self._save_project_to(self.project_path)
+
+    def save_project_as(self):
+
+        if self.project is None:
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="Save Project As",
+            defaultextension=".mynovel",
+            filetypes=[("MyNovel Project", "*.mynovel")],
+        )
+
+        if not path:
+            return  # usuário cancelou
+
+        self._save_project_to(path)
+
+    # Onde o salvamento de fato acontece -- separado pra ser testável
+    # sem precisar simular o file dialog do Save As.
+    def _save_project_to(self, path):
+
+        self.project.save(path)
+
+        self.project_path = os.path.abspath(path)
+        self.project.loaded_from = os.path.dirname(self.project_path)
+
+        self.dirty = False
+        self.set_status(f'Projeto "{self.project.name}" salvo.')
+
     # --- Ações --------------------------------------------------------
 
     def _not_implemented(self):
@@ -455,7 +520,25 @@ class StudioApp:
             "sem precisar escrever Python.",
         )
 
+    # Protege alterações não salvas: se houver alguma (self.dirty),
+    # pergunta antes de fechar. Sim salva e fecha; Não fecha sem
+    # salvar; Cancelar mantém a janela aberta.
     def on_close(self):
+
+        if self.dirty:
+
+            resposta = messagebox.askyesnocancel(
+                APP_TITLE,
+                f'O projeto "{self.project.name}" tem alterações não salvas.\n'
+                f"Deseja salvar antes de sair?",
+            )
+
+            if resposta is None:  # Cancelar
+                return
+
+            if resposta is True:  # Sim
+                self.save_project()
+
         self.root.destroy()
 
     def run(self):
