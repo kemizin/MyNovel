@@ -67,7 +67,10 @@ try:
         return encontrados
 
     botoes = {b.cget("text"): b for b in achar_botoes(app.story_action_properties_frame)}
-    assert set(botoes) == {"Update Action", "Remove Action"}
+    assert set(botoes) == {"Update Action", "Remove Action", "▲ Move Up", "▼ Move Down"}
+    # primeira Action da lista -- não tem pra onde subir
+    assert str(botoes["▲ Move Up"].cget("state")) == "disabled"
+    assert str(botoes["▼ Move Down"].cget("state")) == "normal"
 
     # --- update_story_action(): a versão testável direta ---
     app.dirty = False

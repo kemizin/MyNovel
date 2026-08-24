@@ -353,3 +353,29 @@ class StudioCore:
 
         del story.actions[index]
         self.dirty = True
+
+    # Troca a Action em `index` de lugar com a vizinha (delta=-1 pra
+    # cima, +1 pra baixo). Já na ponta (não tem vizinha nessa direção)
+    # é no-op silencioso, não erro -- mesmo espírito de índice fora do
+    # range em apply_scene_field. Devolve o índice onde a Action
+    # terminou (igual a `index` se foi no-op) -- quem chama usa isso
+    # pra saber o que re-selecionar na lista.
+    def move_story_action(self, story_key, index, delta):
+
+        story = self.project.stories[story_key]
+
+        if index < 0 or index >= len(story.actions):
+            raise StudioError("Action não encontrada.")
+
+        novo_index = index + delta
+
+        if novo_index < 0 or novo_index >= len(story.actions):
+            return index
+
+        story.actions[index], story.actions[novo_index] = (
+            story.actions[novo_index],
+            story.actions[index],
+        )
+        self.dirty = True
+
+        return novo_index

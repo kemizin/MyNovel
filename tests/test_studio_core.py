@@ -333,6 +333,42 @@ try:
     except StudioError:
         pass
 
+    # --- move_story_action: troca de lugar com a vizinha ---
+    core.add_story_action("capitulo_extra", "pause", duration=1)
+    core.add_story_action("capitulo_extra", "exit", character="mika")
+    # agora: [0]=speak, [1]=pause, [2]=exit
+    ordem_antes = [a.type for a in core.project.stories["capitulo_extra"].actions]
+    assert ordem_antes == ["speak", "pause", "exit"]
+
+    core.dirty = False
+    novo_indice = core.move_story_action("capitulo_extra", 1, -1)  # "pause" sobe
+    assert novo_indice == 0
+    ordem_depois = [a.type for a in core.project.stories["capitulo_extra"].actions]
+    assert ordem_depois == ["pause", "speak", "exit"]
+    assert core.dirty is True
+
+    # mover pra baixo é o inverso
+    novo_indice = core.move_story_action("capitulo_extra", 0, 1)
+    assert novo_indice == 1
+    assert [a.type for a in core.project.stories["capitulo_extra"].actions] == ["speak", "pause", "exit"]
+
+    # já na ponta: no-op silencioso, devolve o mesmo índice, não marca dirty
+    core.dirty = False
+    novo_indice = core.move_story_action("capitulo_extra", 0, -1)  # já é o primeiro
+    assert novo_indice == 0
+    assert core.dirty is False
+    assert [a.type for a in core.project.stories["capitulo_extra"].actions] == ["speak", "pause", "exit"]
+
+    novo_indice = core.move_story_action("capitulo_extra", 2, 1)  # já é o último
+    assert novo_indice == 2
+    assert core.dirty is False
+
+    try:
+        core.move_story_action("capitulo_extra", 99, -1)
+        assert False, "esperava StudioError (índice fora do range)"
+    except StudioError:
+        pass
+
 finally:
     shutil.rmtree(tmp_dir, ignore_errors=True)
 

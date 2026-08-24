@@ -854,6 +854,22 @@ class StudioApp:
             command=lambda: self._remove_story_action(index),
         ).pack(side=tk.LEFT, padx=(8, 0))
 
+        # desabilitados na ponta -- não tem pra onde mover ali (mesmo
+        # feedback de "Save"/"Play" desabilitados sem projeto aberto:
+        # o botão em si já diz o que é possível fazer agora).
+        tk.Button(
+            buttons_row,
+            text="▲ Move Up",
+            state=tk.NORMAL if index > 0 else tk.DISABLED,
+            command=lambda: self.move_story_action(self.story_editor_key, index, -1),
+        ).pack(side=tk.LEFT, padx=(8, 0))
+        tk.Button(
+            buttons_row,
+            text="▼ Move Down",
+            state=tk.NORMAL if index < len(data.actions) - 1 else tk.DISABLED,
+            command=lambda: self.move_story_action(self.story_editor_key, index, 1),
+        ).pack(side=tk.LEFT, padx=(4, 0))
+
     # Substitui os campos da Action selecionada -- separado do botão,
     # testável direto. Mantém a seleção (só a listbox é repovoada, não
     # o editor inteiro) pra continuar mostrando a mesma Action editada.
@@ -883,6 +899,29 @@ class StudioApp:
 
         self._update_title()  # o Core já marcou dirty
         self._refresh_story_listbox()
+        self._render_story_action_properties()
+
+    # Troca a Action de `index` de lugar com a vizinha (delta=-1/+1).
+    # Diferente de update/remove, a seleção não fica no MESMO índice
+    # depois -- segue a Action que se moveu (novo_index, devolvido
+    # pelo Core) pra continuar mostrando a mesma Action selecionada,
+    # só que na posição nova.
+    def move_story_action(self, story_key, index, delta):
+
+        try:
+            novo_index = self.core.move_story_action(story_key, index, delta)
+
+        except StudioError as error:
+            messagebox.showerror(APP_TITLE, str(error))
+            return
+
+        self._update_title()  # o Core já marcou dirty (se moveu de verdade)
+
+        self.story_listbox.delete(0, tk.END)
+        for action in self.project.stories[story_key].actions:
+            self.story_listbox.insert(tk.END, action.describe())
+
+        self.story_listbox.selection_set(novo_index)
         self._render_story_action_properties()
 
     def _delete_story(self, story_key):
