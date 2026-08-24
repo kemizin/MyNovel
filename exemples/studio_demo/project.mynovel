@@ -1,0 +1,64 @@
+{
+  "format": "mynovel",
+  "version": 1,
+  "name": "Studio Demo",
+  "resolution": [
+    960,
+    540
+  ],
+  "scenes": {
+    "praca": {
+      "name": "praca",
+      "background": "assets/backgrounds/praca.png",
+      "resolution": null,
+      "music": null,
+      "characters": [
+        {
+          "character": "mika",
+          "position": 2,
+          "scale": 0.5,
+          "offset_x": 0,
+          "offset_y": 0,
+          "emotion": "normal"
+        }
+      ]
+    }
+  },
+  "stories": {
+    "intro": {
+      "name": "intro",
+      "actions": [
+        {
+          "type": "speak",
+          "character": "mika",
+          "text": "Oi! Esse projeto foi montado e editado inteiro pelo MyNovel Studio."
+        },
+        {
+          "type": "speak",
+          "character": "mika",
+          "text": "Abra o Project Explorer, edite meu emocional ou minha posicao na cena, e clique Play de novo."
+        },
+        {
+          "type": "pause",
+          "duration": 0.5
+        },
+        {
+          "type": "exit",
+          "character": "mika"
+        }
+      ]
+    }
+  },
+  "assets": {},
+  "characters": {
+    "mika": {
+      "name": "Mika",
+      "emotions": {
+        "normal": {
+          "idle": "assets/characters/mika/normal_idle.png",
+          "talking": "assets/characters/mika/normal_talking.png"
+        }
+      }
+    }
+  }
+}
