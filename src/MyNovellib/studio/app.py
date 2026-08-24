@@ -25,9 +25,8 @@ class StudioApp:
 
         self.project = None
         self.project_path = None  # caminho exato do .mynovel aberto/salvo
-        self.dirty = False
+        self.dirty = False  # via property -- já atualiza o título (ver _update_title)
 
-        self.root.title(APP_TITLE)
         self.root.geometry("1024x700")
         self.root.minsize(640, 480)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -352,9 +351,8 @@ class StudioApp:
 
     def _on_project_loaded(self):
 
-        self.root.title(f"{APP_TITLE} — {self.project.name}")
+        self.dirty = False  # via property -- já atualiza o título
         self.set_status(f'Projeto "{self.project.name}" carregado.')
-        self.dirty = False
         self._set_project_actions_enabled(True)
         self._refresh_explorer()
         self._refresh_asset_browser()
@@ -370,11 +368,36 @@ class StudioApp:
         self.toolbar_buttons["Save"].config(state=state)
         self.toolbar_buttons["Play"].config(state=state)
 
-    # Chamado por qualquer edição futura (Character/Scene/Story/
-    # Project) pra marcar que existem alterações não salvas. Ainda
-    # sem indicação visual no título (isso é o próximo Waystone,
-    # Dirty State) -- aqui só o mecanismo que a proteção ao fechar
-    # (on_close) e o Save já usam.
+    # `dirty` é property (não atributo simples) justamente pra que
+    # QUALQUER jeito de mudar seu valor -- mark_dirty(), Save, carregar
+    # um projeto, ou até "app.dirty = True" direto (como os testes já
+    # fazem) -- atualize o título da janela sozinho, sem precisar
+    # lembrar de chamar mais nada em cada ponto de edição.
+    @property
+    def dirty(self):
+        return self._dirty
+
+    @dirty.setter
+    def dirty(self, value):
+        self._dirty = bool(value)
+        self._update_title()
+
+    # Título reflete o estado de dirty: "MyNovel Studio — MeuJogo *"
+    # com alterações não salvas, "MyNovel Studio — MeuJogo" sem. Sem
+    # projeto carregado ainda, só o nome do app.
+    def _update_title(self):
+
+        if self.project is None:
+            self.root.title(APP_TITLE)
+            return
+
+        marcador = " *" if self._dirty else ""
+        self.root.title(f"{APP_TITLE} — {self.project.name}{marcador}")
+
+    # Chamado por qualquer edição (Character/Scene/Story/Project) pra
+    # marcar que existem alterações não salvas -- a property acima já
+    # cuida de refletir isso no título. A proteção ao fechar (on_close)
+    # e o Save usam esse mesmo self.dirty.
     def mark_dirty(self):
         self.dirty = True
 
