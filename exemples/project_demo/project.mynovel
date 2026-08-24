@@ -1,0 +1,82 @@
+{
+  "format": "mynovel",
+  "version": 1,
+  "name": "Project Demo",
+  "resolution": [
+    960,
+    540
+  ],
+  "scenes": {
+    "praca": {
+      "name": "praca",
+      "background": "assets/backgrounds/praca.png",
+      "resolution": null,
+      "music": null,
+      "characters": []
+    }
+  },
+  "stories": {
+    "intro": {
+      "name": "intro",
+      "actions": [
+        {
+          "type": "enter",
+          "character": "mika",
+          "position": 2,
+          "scale": 0.6
+        },
+        {
+          "type": "speak",
+          "character": "mika",
+          "text": "Oi! Bem-vindo ao MyNovel."
+        },
+        {
+          "type": "emotion",
+          "character": "mika",
+          "emotion": "normal"
+        },
+        {
+          "type": "speak",
+          "character": "mika",
+          "text": "Este projeto inteiro veio de um arquivo .mynovel -- nenhuma linha de Python escreveu esta cena."
+        },
+        {
+          "type": "pause",
+          "duration": 1
+        },
+        {
+          "type": "exit",
+          "character": "mika"
+        }
+      ]
+    }
+  },
+  "assets": {
+    "mika.normal.idle": {
+      "id": "mika.normal.idle",
+      "type": "character_sprite",
+      "path": "assets/characters/mika/normal_idle.png"
+    },
+    "mika.normal.talking": {
+      "id": "mika.normal.talking",
+      "type": "character_sprite",
+      "path": "assets/characters/mika/normal_talking.png"
+    },
+    "praca.bg": {
+      "id": "praca.bg",
+      "type": "background",
+      "path": "assets/backgrounds/praca.png"
+    }
+  },
+  "characters": {
+    "mika": {
+      "name": "Mika",
+      "emotions": {
+        "normal": {
+          "idle": "assets/characters/mika/normal_idle.png",
+          "talking": "assets/characters/mika/normal_talking.png"
+        }
+      }
+    }
+  }
+}
