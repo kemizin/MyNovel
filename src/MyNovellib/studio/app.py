@@ -876,7 +876,9 @@ class StudioApp:
             highlightbackground="gray50",
         )
         canvas.pack(padx=8, pady=8)
-        canvas.bind("<Button-1>", self._on_scene_canvas_click)
+        canvas.bind("<ButtonPress-1>", self._on_scene_canvas_press)
+        canvas.bind("<B1-Motion>", self._on_scene_canvas_drag)
+        canvas.bind("<ButtonRelease-1>", self._on_scene_canvas_release)
 
         self.scene_canvas = canvas
         self.scene_editor_key = scene_key
@@ -884,6 +886,7 @@ class StudioApp:
         self.scene_selected_index = None
         self._scene_canvas_images = []
         self._scene_item_bounds = {}
+        self._scene_drag = None
 
         self.scene_properties_frame = tk.Frame(parent)
         self.scene_properties_frame.pack(fill=tk.X, padx=8, pady=(0, 8))
@@ -995,18 +998,68 @@ class StudioApp:
 
         self._scene_item_bounds[index] = (x, y, image.width(), image.height())
 
-    def _on_scene_canvas_click(self, event):
+    # Clique: seleciona o personagem (ou desseleciona, se for fora de
+    # qualquer um) e guarda o estado inicial do arraste, caso o mouse
+    # se mova em seguida com o botão pressionado.
+    def _on_scene_canvas_press(self, event):
 
         canvas = event.widget
         itens = canvas.find_overlapping(event.x, event.y, event.x, event.y)
 
         for item in reversed(itens):
             for tag in canvas.gettags(item):
+
                 if tag.startswith("placement:"):
-                    self._select_scene_character(int(tag.split(":", 1)[1]))
+
+                    index = int(tag.split(":", 1)[1])
+                    self._select_scene_character(index)
+
+                    placement = self.project.scenes[self.scene_editor_key].characters[index]
+
+                    self._scene_drag = {
+                        "index": index,
+                        "start_x": event.x,
+                        "start_y": event.y,
+                        "offset_x": placement.offset_x,
+                        "offset_y": placement.offset_y,
+                    }
+
                     return
 
+        self._scene_drag = None
         self._select_scene_character(None)
+
+    # Arrastar: move o personagem em tempo real, ajustando
+    # offset_x/offset_y (a posição -- slot 1/2/3 -- continua a mesma;
+    # arrastar faz um ajuste fino, igual os campos numéricos de
+    # Offset X/Y já permitiam, só que com o mouse).
+    def _on_scene_canvas_drag(self, event):
+
+        drag = self._scene_drag
+
+        if drag is None:
+            return
+
+        data = self.project.scenes[self.scene_editor_key]
+
+        if drag["index"] >= len(data.characters):
+            return
+
+        placement = data.characters[drag["index"]]
+        factor = self.scene_preview_factor
+
+        delta_x = int((event.x - drag["start_x"]) * factor)
+        delta_y = int((event.y - drag["start_y"]) * factor)
+
+        placement.offset_x = drag["offset_x"] + delta_x
+        placement.offset_y = drag["offset_y"] + delta_y
+
+        self.mark_dirty()
+        self._render_scene_canvas()
+        self._render_scene_properties()
+
+    def _on_scene_canvas_release(self, event):
+        self._scene_drag = None
 
     def _select_scene_character(self, index):
 

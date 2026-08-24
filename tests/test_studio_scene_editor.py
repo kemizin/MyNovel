@@ -80,7 +80,7 @@ assert "Clique" in placeholder.cget("text")
 # calculadas no proprio render, sem precisar de mouse de verdade) ---
 x, y, w, h = app._scene_item_bounds[0]
 evento = FakeEvent(app.scene_canvas, x + w // 2, y + h // 2)
-app._on_scene_canvas_click(evento)
+app._on_scene_canvas_press(evento)
 
 assert app.scene_selected_index == 0
 
@@ -107,11 +107,11 @@ assert [e.get() for e in entries] == ["1", "0.5", "0", "0"]  # Position, Scale, 
 placement = app.project.scenes["praca"].characters[0]
 
 # --- clicar fora de qualquer personagem desseleciona ---
-app._on_scene_canvas_click(FakeEvent(app.scene_canvas, 5, 5))
+app._on_scene_canvas_press(FakeEvent(app.scene_canvas, 5, 5))
 assert app.scene_selected_index is None
 
 # reseleciona pra continuar testando os campos
-app._on_scene_canvas_click(FakeEvent(app.scene_canvas, x + w // 2, y + h // 2))
+app._on_scene_canvas_press(FakeEvent(app.scene_canvas, x + w // 2, y + h // 2))
 assert app.scene_selected_index == 0
 
 # --- editar Position aplica de verdade (via _apply_scene_field,
