@@ -3,10 +3,13 @@
 # fechar -- cada Waystone seguinte liga um pedaço desta interface ao
 # Project System existente (src/MyNovellib/project/).
 
+import os
+
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 
 from src.MyNovellib.project.model import Project
+from src.MyNovellib.project.directory import create_project
 
 APP_TITLE = "MyNovel Studio"
 
@@ -41,7 +44,7 @@ class StudioApp:
         menubar = tk.Menu(self.root)
 
         file_menu = tk.Menu(menubar, tearoff=False)
-        file_menu.add_command(label="New Project...", command=self._not_implemented)
+        file_menu.add_command(label="New Project...", command=self.new_project)
         file_menu.add_command(label="Open Project...", command=self.open_project)
         file_menu.add_separator()
         file_menu.add_command(label="Save", command=self._not_implemented)
@@ -50,10 +53,10 @@ class StudioApp:
         file_menu.add_command(label="Exit", command=self.on_close)
         menubar.add_cascade(label="File", menu=file_menu)
 
-        # New/Save/Save As ainda não existem -- ficam desabilitados até
-        # os Waystones que os implementam (não fingir que funcionam).
-        # Open Project já é real (Waystone 2).
-        for label in ("New Project...", "Save", "Save As..."):
+        # Save/Save As ainda não existem -- ficam desabilitados até o
+        # Waystone que os implementa (não fingir que funcionam). New
+        # Project e Open Project já são reais (Waystones 4 e 2).
+        for label in ("Save", "Save As..."):
             file_menu.entryconfig(label, state=tk.DISABLED)
 
         edit_menu = tk.Menu(menubar, tearoff=False)
@@ -95,7 +98,7 @@ class StudioApp:
         # desabilitados até os Waystones que os implementam; Open já é
         # real (Waystone 2).
         commands = {
-            "New": self._not_implemented,
+            "New": self.new_project,
             "Open": self.open_project,
             "Save": self._not_implemented,
         }
@@ -105,7 +108,7 @@ class StudioApp:
                 self.toolbar,
                 text=label,
                 command=command,
-                state=tk.NORMAL if label == "Open" else tk.DISABLED,
+                state=tk.DISABLED if label == "Save" else tk.NORMAL,
             )
             button.pack(side=tk.LEFT, padx=2, pady=2)
             self.toolbar_buttons[label] = button
@@ -165,6 +168,121 @@ class StudioApp:
 
     def set_status(self, text):
         self.status_bar.config(text=text)
+
+    # --- Novo projeto ---------------------------------------------------
+    #
+    # Mesmo princípio do Open Project: new_project() só monta o
+    # diálogo; create_new_project(...) faz o trabalho de verdade e é
+    # testável direto, sem precisar simular clique no diálogo.
+
+    def new_project(self):
+        self._open_new_project_dialog()
+
+    def _open_new_project_dialog(self):
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("New Project")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        name_var = tk.StringVar(value="Minha Visual Novel")
+        location_var = tk.StringVar(value=os.getcwd())
+        width_var = tk.StringVar(value="1920")
+        height_var = tk.StringVar(value="1080")
+
+        pad = {"padx": 8, "pady": 4}
+
+        tk.Label(dialog, text="Name:").grid(row=0, column=0, sticky="w", **pad)
+        tk.Entry(dialog, textvariable=name_var, width=32).grid(
+            row=0, column=1, columnspan=2, sticky="we", **pad
+        )
+
+        tk.Label(dialog, text="Location:").grid(row=1, column=0, sticky="w", **pad)
+        tk.Entry(dialog, textvariable=location_var, width=32).grid(
+            row=1, column=1, sticky="we", **pad
+        )
+
+        def browse_location():
+            chosen = filedialog.askdirectory(title="Choose Location")
+            if chosen:
+                location_var.set(chosen)
+
+        tk.Button(dialog, text="Browse...", command=browse_location).grid(
+            row=1, column=2, **pad
+        )
+
+        tk.Label(dialog, text="Width:").grid(row=2, column=0, sticky="w", **pad)
+        tk.Entry(dialog, textvariable=width_var, width=10).grid(
+            row=2, column=1, sticky="w", **pad
+        )
+
+        tk.Label(dialog, text="Height:").grid(row=3, column=0, sticky="w", **pad)
+        tk.Entry(dialog, textvariable=height_var, width=10).grid(
+            row=3, column=1, sticky="w", **pad
+        )
+
+        def on_create():
+            criado = self.create_new_project(
+                name_var.get(), location_var.get(), width_var.get(), height_var.get()
+            )
+            if criado:
+                dialog.destroy()
+
+        tk.Button(dialog, text="Create", command=on_create).grid(
+            row=4, column=0, columnspan=3, pady=(12, 8)
+        )
+
+        # exposto pra quem (testes) precisar inspecionar o diálogo
+        self.new_project_dialog = dialog
+
+        return dialog
+
+    # Cria o projeto de verdade: valida os campos, reaproveita
+    # create_project() (Project System Update, sem duplicar nenhuma
+    # lógica de criação) e abre o projeto recém-criado no Studio.
+    # Retorna True em sucesso, False se algo for inválido (e mostra o
+    # erro correspondente) -- o diálogo usa o retorno pra saber se
+    # pode se fechar.
+    def create_new_project(self, name, location, width, height):
+
+        name = (name or "").strip()
+        location = (location or "").strip()
+
+        if not name:
+            messagebox.showerror(APP_TITLE, "Informe um nome para o projeto.")
+            return False
+
+        if not location:
+            messagebox.showerror(APP_TITLE, "Informe onde o projeto deve ser criado.")
+            return False
+
+        try:
+            width = int(width)
+            height = int(height)
+
+            if width <= 0 or height <= 0:
+                raise ValueError
+
+        except (TypeError, ValueError):
+            messagebox.showerror(
+                APP_TITLE, "Largura e altura precisam ser números inteiros positivos."
+            )
+            return False
+
+        project_path = os.path.join(location, name)
+
+        try:
+            directory = create_project(project_path, name=name, resolution=(width, height))
+
+        except FileExistsError as error:
+            messagebox.showerror(
+                APP_TITLE, f"Não foi possível criar o projeto:\n\n{error}"
+            )
+            return False
+
+        self.load_project(directory.project_file)
+
+        return True
 
     # --- Projeto ------------------------------------------------------
     #
