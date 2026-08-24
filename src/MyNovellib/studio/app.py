@@ -453,10 +453,10 @@ class StudioApp:
 
         self._show_properties(selection[0])
 
-    # Reconstrói o painel Properties pro item selecionado. Character
-    # tem um editor de verdade (Waystone 7); todo o resto continua
-    # como resumo somente-leitura (com thumbnail sob demanda, se o
-    # item for um asset de imagem).
+    # Reconstrói o painel Properties pro item selecionado. Character e
+    # Scene têm editor de verdade (Waystones 7 e 8); todo o resto
+    # continua como resumo somente-leitura (com thumbnail sob demanda,
+    # se o item for um asset de imagem).
     def _show_properties(self, iid):
 
         for widget in self.properties_content.winfo_children():
@@ -464,6 +464,10 @@ class StudioApp:
 
         if iid.startswith("character:"):
             self._build_character_editor(iid.split(":", 1)[1])
+            return
+
+        if iid.startswith("scene:"):
+            self._build_scene_editor(iid.split(":", 1)[1])
             return
 
         self._build_readonly_properties(self._describe_selection(iid), thumbnail_iid=iid)
@@ -827,6 +831,322 @@ class StudioApp:
         self._show_properties(f"character:{character_key}")
 
         return True
+
+    # --- Scene Editor ---------------------------------------------------
+    #
+    # Primeiro canvas visual do Studio: mostra o background e os
+    # personagens de uma cena (SceneData), na posição/escala/offset
+    # certos. Ainda não é um editor profissional -- sem
+    # drag-and-drop; clicar num personagem seleciona, e os valores
+    # (Position/Scale/Emotion/Offset X/Offset Y) são editados
+    # numericamente no painel Properties.
+    #
+    # Reaproveita a MESMA fórmula de posição que a Engine usa
+    # (draw_characters() em engine.py: 1/2/3 -> 25%/50%/75% da
+    # largura, pés alinhados embaixo) -- é matemática de layout
+    # simples e estável, não a lógica de execução da Engine (loop de
+    # eventos, timing, Actions). Sem isso reproduzido aqui, não
+    # existiria NENHUM preview visual possível (uma Surface do pygame
+    # não entra dentro de um tk.Canvas).
+    #
+    # Edita SceneData/SceneCharacter (Project Data) -- Canvas de
+    # Runtime (src/MyNovellib/scene.py) não é importado aqui.
+
+    SCENE_PREVIEW_MAX_WIDTH = 480
+    SCENE_X_POSITIONS = {1: 0.25, 2: 0.50, 3: 0.75}
+
+    def _build_scene_editor(self, scene_key):
+
+        parent = self.properties_content
+        data = self.project.scenes[scene_key]
+
+        tk.Label(
+            parent, text="SCENE", anchor="w", font=("", 9, "bold")
+        ).pack(fill=tk.X, padx=8, pady=(8, 0))
+
+        width, height = data.resolution or self.project.resolution
+        factor = max(1, round(width / self.SCENE_PREVIEW_MAX_WIDTH))
+
+        canvas = tk.Canvas(
+            parent,
+            width=max(1, width // factor),
+            height=max(1, height // factor),
+            bg="gray20",
+            highlightthickness=1,
+            highlightbackground="gray50",
+        )
+        canvas.pack(padx=8, pady=8)
+        canvas.bind("<Button-1>", self._on_scene_canvas_click)
+
+        self.scene_canvas = canvas
+        self.scene_editor_key = scene_key
+        self.scene_preview_factor = factor
+        self.scene_selected_index = None
+        self._scene_canvas_images = []
+        self._scene_item_bounds = {}
+
+        self.scene_properties_frame = tk.Frame(parent)
+        self.scene_properties_frame.pack(fill=tk.X, padx=8, pady=(0, 8))
+
+        self._render_scene_canvas()
+        self._render_scene_properties()
+
+    # Redesenha o canvas inteiro (background + personagens + contorno
+    # de seleção). Chamado sempre que algo muda -- é uma cena estática
+    # (sem animação ainda), redesenhar tudo é simples e barato o
+    # bastante pra esse tamanho de preview.
+    def _render_scene_canvas(self):
+
+        canvas = self.scene_canvas
+        canvas.delete("all")
+
+        data = self.project.scenes[self.scene_editor_key]
+        factor = self.scene_preview_factor
+
+        self._scene_canvas_images = []
+        self._scene_item_bounds = {}
+
+        bg_image = self._load_scaled_image(data.background, factor)
+
+        if bg_image is not None:
+            canvas.create_image(0, 0, anchor="nw", image=bg_image)
+            self._scene_canvas_images.append(bg_image)
+
+        for index, placement in enumerate(data.characters):
+            self._draw_scene_character(canvas, placement, index, factor)
+
+        if self.scene_selected_index in self._scene_item_bounds:
+            x, y, w, h = self._scene_item_bounds[self.scene_selected_index]
+            canvas.create_rectangle(
+                x, y, x + w, y + h, outline="yellow", width=2, tags=("selection",)
+            )
+
+    def _load_scaled_image(self, path, factor):
+
+        if not path:
+            return None
+
+        resolved = self._resolve_project_path(path)
+
+        if not os.path.isfile(resolved):
+            return None
+
+        try:
+            image = tk.PhotoImage(file=resolved)
+        except tk.TclError:
+            return None
+
+        if factor > 1:
+            image = image.subsample(factor, factor)
+
+        return image
+
+    # Sprite "idle" a usar no preview: a emoção do placement, se
+    # registrada; senão a primeira emoção cadastrada (em ordem
+    # alfabética), só pra sempre ter algo pra mostrar.
+    def _character_sprite_for_preview(self, character_key, emotion_name):
+
+        character_data = self.project.characters.get(character_key)
+
+        if character_data is None or not character_data.emotions:
+            return None
+
+        nome = emotion_name if emotion_name in character_data.emotions else sorted(character_data.emotions)[0]
+
+        return character_data.emotions[nome]["idle"]
+
+    def _draw_scene_character(self, canvas, placement, index, factor):
+
+        sprite_path = self._character_sprite_for_preview(placement.character, placement.emotion)
+
+        if not sprite_path:
+            return
+
+        resolved = self._resolve_project_path(sprite_path)
+
+        if not os.path.isfile(resolved):
+            return
+
+        try:
+            image = tk.PhotoImage(file=resolved)
+        except tk.TclError:
+            return
+
+        # combina a redução do preview com a escala do personagem.
+        # PhotoImage só reduz (subsample) -- scale >= 1 não amplia
+        # além do tamanho do preview; aproximação aceitável pra um
+        # editor que ainda não é profissional.
+        escala = max(placement.scale, 0.01)
+        combined_factor = max(1, round(factor / escala)) if escala < 1 else factor
+
+        if combined_factor > 1:
+            image = image.subsample(combined_factor, combined_factor)
+
+        self._scene_canvas_images.append(image)
+
+        canvas_width = int(canvas["width"])
+        canvas_height = int(canvas["height"])
+
+        center_x = int(canvas_width * self.SCENE_X_POSITIONS.get(placement.position, 0.5))
+        x = center_x - image.width() // 2 + int(placement.offset_x / factor)
+        y = canvas_height - image.height() + int(placement.offset_y / factor)
+
+        canvas.create_image(x, y, anchor="nw", image=image, tags=(f"placement:{index}",))
+
+        self._scene_item_bounds[index] = (x, y, image.width(), image.height())
+
+    def _on_scene_canvas_click(self, event):
+
+        canvas = event.widget
+        itens = canvas.find_overlapping(event.x, event.y, event.x, event.y)
+
+        for item in reversed(itens):
+            for tag in canvas.gettags(item):
+                if tag.startswith("placement:"):
+                    self._select_scene_character(int(tag.split(":", 1)[1]))
+                    return
+
+        self._select_scene_character(None)
+
+    def _select_scene_character(self, index):
+
+        self.scene_selected_index = index
+        self._render_scene_canvas()
+        self._render_scene_properties()
+
+    # Painel Properties da Scene: Character (informativo -- trocar de
+    # personagem não é editável ainda), Position/Scale/Offset X/
+    # Offset Y (numéricos) e Emotion (lista das emoções cadastradas
+    # pro personagem).
+    def _render_scene_properties(self):
+
+        for widget in self.scene_properties_frame.winfo_children():
+            widget.destroy()
+
+        data = self.project.scenes[self.scene_editor_key]
+        index = self.scene_selected_index
+
+        if index is None or index >= len(data.characters):
+            tk.Label(
+                self.scene_properties_frame,
+                text="Clique num personagem na cena para editar.",
+                fg="gray40",
+                anchor="w",
+            ).pack(fill=tk.X)
+            return
+
+        placement = data.characters[index]
+
+        tk.Label(
+            self.scene_properties_frame,
+            text=f"Character: {placement.character}",
+            anchor="w",
+            font=("", 9, "bold"),
+        ).pack(fill=tk.X, pady=(4, 6))
+
+        self._build_scene_numeric_field(
+            "Position:", placement.position,
+            lambda valor: self._apply_scene_field(index, "position", valor, self._parse_position),
+        )
+        self._build_scene_numeric_field(
+            "Scale:", placement.scale,
+            lambda valor: self._apply_scene_field(index, "scale", valor, self._parse_positive_float),
+        )
+        self._build_scene_emotion_field(placement)
+        self._build_scene_numeric_field(
+            "Offset X:", placement.offset_x,
+            lambda valor: self._apply_scene_field(index, "offset_x", valor, int),
+        )
+        self._build_scene_numeric_field(
+            "Offset Y:", placement.offset_y,
+            lambda valor: self._apply_scene_field(index, "offset_y", valor, int),
+        )
+
+    def _build_scene_numeric_field(self, label, initial, on_commit):
+
+        row = tk.Frame(self.scene_properties_frame)
+        row.pack(fill=tk.X, pady=2)
+
+        tk.Label(row, text=label, width=10, anchor="w").pack(side=tk.LEFT)
+
+        var = tk.StringVar(value=str(initial))
+        entry = tk.Entry(row, textvariable=var)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def commit(event=None):
+            on_commit(var.get())
+
+        entry.bind("<Return>", commit)
+        entry.bind("<FocusOut>", commit)
+
+    def _build_scene_emotion_field(self, placement):
+
+        row = tk.Frame(self.scene_properties_frame)
+        row.pack(fill=tk.X, pady=2)
+
+        tk.Label(row, text="Emotion:", width=10, anchor="w").pack(side=tk.LEFT)
+
+        character_data = self.project.characters.get(placement.character)
+        opcoes = sorted(character_data.emotions) if character_data else []
+
+        var = tk.StringVar(value=placement.emotion or "")
+        combo = ttk.Combobox(
+            row,
+            textvariable=var,
+            values=opcoes,
+            state="readonly" if opcoes else "disabled",
+        )
+        combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def on_select(event=None):
+            placement.emotion = var.get() or None
+            self.mark_dirty()
+            self._render_scene_canvas()
+
+        combo.bind("<<ComboboxSelected>>", on_select)
+
+    @staticmethod
+    def _parse_position(raw_value):
+
+        valor = int(raw_value)
+
+        if valor not in (1, 2, 3):
+            raise ValueError("Position precisa ser 1, 2 ou 3.")
+
+        return valor
+
+    @staticmethod
+    def _parse_positive_float(raw_value):
+
+        valor = float(raw_value)
+
+        if valor <= 0:
+            raise ValueError("Scale precisa ser maior que zero.")
+
+        return valor
+
+    def _apply_scene_field(self, index, field, raw_value, parse):
+
+        data = self.project.scenes[self.scene_editor_key]
+
+        if index >= len(data.characters):
+            return
+
+        placement = data.characters[index]
+
+        try:
+            valor = parse(raw_value)
+
+        except (TypeError, ValueError) as error:
+            messagebox.showerror(APP_TITLE, f"Valor inválido em {field}: {error}")
+            self._render_scene_properties()  # volta pro valor antigo
+            return
+
+        setattr(placement, field, valor)
+        self.mark_dirty()
+
+        self._render_scene_canvas()
+        self._render_scene_properties()
 
     # --- Salvar -------------------------------------------------------
     #

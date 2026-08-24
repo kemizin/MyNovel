@@ -75,11 +75,18 @@ labels_do_editor = [
 assert "CHARACTER" in labels_do_editor
 
 # --- selecionar uma cena mostra fundo/musica/quantidade de personagens ---
+# --- selecionar uma cena abre o Scene Editor (Waystone 8), nao mais
+# um texto somente-leitura -- so confirma que o canvas aparece; o
+# comportamento dele em detalhe e testado em
+# test_studio_scene_editor.py ---
 app.explorer.selection_set("scene:praca")
 app._on_explorer_select()
-texto = app.properties_label.cget("text")
-assert "praca" in texto
-assert "praca.png" in texto  # caminho do fundo
+labels_da_cena = [
+    w.cget("text") for w in app.properties_content.winfo_children()
+    if isinstance(w, tk.Label)
+]
+assert "SCENE" in labels_da_cena
+assert isinstance(app.scene_canvas, tk.Canvas)
 
 # --- selecionar uma historia mostra a quantidade de acoes ---
 app.explorer.selection_set("story:intro")
