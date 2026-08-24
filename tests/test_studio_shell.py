@@ -63,9 +63,11 @@ labels = [label for label, _ in file_entries]
 assert labels == ["New Project...", "Open Project...", "Save", "Save As...", "Exit"]
 
 estados = dict(file_entries)
-for rotulo_desabilitado in ("New Project...", "Open Project...", "Save", "Save As..."):
+for rotulo_desabilitado in ("New Project...", "Save", "Save As..."):
     assert estados[rotulo_desabilitado] == "disabled", rotulo_desabilitado
 
+# Open Project e Exit ja sao reais (Waystones 1 e 2)
+assert estados["Open Project..."] == "normal"
 assert estados["Exit"] == "normal"
 
 # --- Edit/Scene/Build existem mas ainda sem itens (nada fake) ---
@@ -77,10 +79,11 @@ assert menu_entries(app.menus["Build"]) == []
 help_entries = menu_entries(app.menus["Help"])
 assert help_entries == [("About MyNovel Studio", "normal")]
 
-# --- toolbar espelha os 3 comandos ainda nao implementados, desabilitados ---
+# --- toolbar: New/Save ainda desabilitados, Open ja funciona ---
 assert set(app.toolbar_buttons) == {"New", "Open", "Save"}
-for button in app.toolbar_buttons.values():
-    assert str(button.cget("state")) == "disabled"
+assert str(app.toolbar_buttons["New"].cget("state")) == "disabled"
+assert str(app.toolbar_buttons["Save"].cget("state")) == "disabled"
+assert str(app.toolbar_buttons["Open"].cget("state")) == "normal"
 
 # --- fechar: on_close() destroi a janela sem excecao ---
 assert app.root.winfo_exists()
